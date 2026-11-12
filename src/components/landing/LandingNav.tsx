@@ -61,12 +61,12 @@ export const LandingNav: React.FC = () => {
           {/* CTA derecho — punto azul + texto */}
           <div className="hidden md:flex items-center">
             <Link
-              href="/dashboard"
+              href="/onboarding"
               className="group flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-[#0C1424] hover:text-[#2540EB] transition-colors duration-300"
               style={{ fontFamily: 'var(--font-inter)' }}
             >
               <span className="h-1.5 w-1.5 rounded-full bg-[#2540EB] group-hover:scale-125 transition-transform duration-300" />
-              <span>Ver Demo Live</span>
+              <span>Empezar</span>
             </Link>
           </div>
 
@@ -95,12 +95,12 @@ export const LandingNav: React.FC = () => {
             </a>
           ))}
           <Link
-            href="/dashboard"
+            href="/onboarding"
             onClick={() => setMobileOpen(false)}
             className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-[#2540EB]"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-[#2540EB]" />
-            <span>Ver Demo Live</span>
+            <span>Empezar</span>
           </Link>
         </div>
       )}

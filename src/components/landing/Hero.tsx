@@ -64,11 +64,11 @@ export const Hero: React.FC = () => {
               <ArrowUpRight className="h-4 w-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300" />
             </Link>
             <Link
-              href="/dashboard"
+              href="/onboarding"
               className="inline-flex items-center justify-center rounded-2xl bg-[#0C1424] hover:bg-[#1A2235] active:scale-[0.97] transition-all duration-300 text-white text-sm font-semibold px-7 py-3.5 shadow-lg shadow-[#0C1424]/10"
               style={{ fontFamily: 'var(--font-inter)' }}
             >
-              Ver Live Demo
+              Empezar
             </Link>
           </div>
         </div>

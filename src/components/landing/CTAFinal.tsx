@@ -40,11 +40,11 @@ export const CTAFinal: React.FC = () => {
             </p>
 
             <Link
-              href="/dashboard"
+              href="/onboarding"
               className="group inline-flex items-center justify-center gap-2 rounded-2xl bg-white hover:bg-stone-100 active:scale-[0.97] transition-all duration-300 text-[#0C1424] font-semibold text-base px-8 py-4 shadow-lg shadow-black/20"
               style={{ fontFamily: 'var(--font-inter)' }}
             >
-              <span>Ver Demo Live</span>
+              <span>Empezar</span>
               <ArrowUpRight className="h-5 w-5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform duration-300" />
             </Link>
 

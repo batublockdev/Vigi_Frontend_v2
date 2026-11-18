@@ -1,65 +1,82 @@
 import { createPublicClient, createWalletClient, custom, http, parseAbi, formatUnits, parseUnits, Address, Hash } from 'viem';
-import { celo } from 'viem/chains';
+import { bsc } from 'viem/chains';
 
-export const CELO_CHAIN_ID = 42220; // 0xa4ec
-export const CELO_RPC = 'https://forno.celo.org';
+// ============================================================
+//   BNB CHAIN (BSC Mainnet) — Chain ID 56
+//   Basado en ConstantsBnb.sol de stockwallet
+// ============================================================
 
-// Deposit Vault Contract on Celo Mainnet
+export const BSC_CHAIN_ID = 56;
+export const BSC_RPC = 'https://bsc-dataseed.binance.org';
+
+// StockWallet Vault en BNB Chain (pendiente deploy — placeholder por ahora)
 export const DEPOSIT_VAULT_CONTRACT_ADDRESS: Address =
   (process.env.NEXT_PUBLIC_VAULT_CONTRACT_ADDRESS as Address) ||
-  '0x573a678Ea7a51B51344fe6a1781BBCCbF0E453C7';
+  '0x0000000000000000000000000000000000000000'; // TODO: deploy StockWallet en BSC
 
-// Autonomous AI smart account on Celo Mainnet. This is the recipient of
-// deposits from the deposit vault and the source for the 20% reserve view.
+// AI Capital Account en BNB Chain (pendiente deploy — placeholder por ahora)
 export const AI_CAPITAL_ACCOUNT_ADDRESS: Address =
-  '0x74E16132B76Af0B03730F5c4BF540D777b085DDc';
+  '0x0000000000000000000000000000000000000000'; // TODO: deploy MinimalAccount en BSC
 
-export const AI_CAPITAL_TOKENS = {
+// Uniswap V3 en BNB Chain
+export const UNISWAP_V3_FACTORY = '0xdB1d10011AD0Ff90774D0C6Bb92e5C5c8b4461F7';
+export const UNIVERSAL_ROUTER = '0x3fC91A3afd70395Cd496C647d5a6CC9D4B2b7FAD';
+export const PERMIT2 = '0x000000000022D473030F116dDEE9F6B43aC78BA3';
+export const UNISWAP_V3_QUOTER = '0x78D78E420Da98ad378D7799bE8f4AF69033EB077';
+
+// Tokens principales en BSC (18 decimals — importante: diferente a Ethereum)
+export const BSC_TOKENS = {
   USDT: {
-    address: '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e' as Address,
-    decimals: 6,
+    address: '0x55d398326f99059fF775485246999027B3197955' as Address,
+    decimals: 18,
   },
-  aCelUSDT: {
-    address: '0xDeE98402A302e4D707fB9bf2bac66fAEEc31e8Df' as Address,
-    decimals: 6,
+  USDC: {
+    address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d' as Address,
+    decimals: 18,
+  },
+  BTCB: {
+    address: '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c' as Address,
+    decimals: 18,
+  },
+  ETH: {
+    address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8' as Address,
+    decimals: 18,
+  },
+  WBNB: {
+    address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c' as Address,
+    decimals: 18,
   },
 } as const;
 
+// Vault portfolio tokens (BSC) — los que el vault puede invertir
 export const VAULT_PORTFOLIO_TOKENS = [
-  { symbol: 'USDT', name: 'Tether USD', address: '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e' as Address, decimals: 6, fallbackUsdPrice: 1 },
-  { symbol: 'WETH', name: 'Wrapped Ether', address: '0xd221812de1bd094f35587ee8e174b07b6167d9af' as Address, decimals: 18 },
-  { symbol: 'WBTC', name: 'Wrapped Bitcoin', address: '0x8ac2901dd8a1f17a1a4768a6ba4c3751e3995b2d' as Address, decimals: 8 },
-  { symbol: 'wBRL', name: 'Real Digital', address: '0xD76f5Faf6888e24D9F04Bf92a0c8B921FE4390e0' as Address, decimals: 18, fallbackUsdPrice: 1 / 5.05 },
-  { symbol: 'wARS', name: 'Peso Digital', address: '0x0DC4F92879B7670e5f4e4e6e3c801D229129D90D' as Address, decimals: 18, fallbackUsdPrice: 1 / 1050 },
+  { symbol: 'USDT', name: 'Tether USD (BSC)', address: '0x55d398326f99059fF775485246999027B3197955' as Address, decimals: 18, fallbackUsdPrice: 1 },
+  { symbol: 'USDC', name: 'USD Coin (BSC)', address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d' as Address, decimals: 18, fallbackUsdPrice: 1 },
+  { symbol: 'BTCB', name: 'BTCB Token', address: '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c' as Address, decimals: 18 },
+  { symbol: 'ETH', name: 'Ethereum (BSC)', address: '0x2170Ed0880ac9A755fd29B2688956BD959F933F8' as Address, decimals: 18 },
+  { symbol: 'WBNB', name: 'Wrapped BNB', address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c' as Address, decimals: 18 },
 ] as const;
 
 // Standard market exchange rate for Colombian Pesos (COP per USD / USDT)
 export const USD_TO_COP_RATE = 4200;
 
+// Tokens que se pueden depositar via InvestModal
 export const DEPOSIT_TOKENS = {
   USDT: {
     symbol: 'USDT',
-    name: 'Tether USD',
-    address: '0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e' as Address,
-    decimals: 6,
+    name: 'Tether USD (BSC)',
+    address: '0x55d398326f99059fF775485246999027B3197955' as Address,
+    decimals: 18, // BSC usa 18 decimals, no 6
     defaultCountry: 'CO',
     ripioToken: 'USDT',
   },
-  wBRL: {
-    symbol: 'wBRL',
-    name: 'Real Digital (wBRL)',
-    address: '0xD76f5Faf6888e24D9F04Bf92a0c8B921FE4390e0' as Address,
+  USDC: {
+    symbol: 'USDC',
+    name: 'USD Coin (BSC)',
+    address: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d' as Address,
     decimals: 18,
     defaultCountry: 'CO',
-    ripioToken: 'WBRL',
-  },
-  wARS: {
-    symbol: 'wARS',
-    name: 'Peso Digital (wARS)',
-    address: '0x0DC4F92879B7670e5f4e4e6e3c801D229129D90D' as Address,
-    decimals: 18,
-    defaultCountry: 'CO',
-    ripioToken: 'WARS',
+    ripioToken: 'USDC',
   },
 } as const;
 
@@ -75,14 +92,8 @@ export function convertTokenToCOP(
 ): number {
   if (tokenAmount <= 0) return 50000; // Sensible default: 50,000 COP
 
-  if (tokenSymbol === 'USDT') {
+  if (tokenSymbol === 'USDT' || tokenSymbol === 'USDC') {
     return Math.round(tokenAmount * USD_TO_COP_RATE);
-  } else if (tokenSymbol === 'wBRL') {
-    const usd = tokenAmount / (brlRate > 0 ? brlRate : 5.05);
-    return Math.round(usd * USD_TO_COP_RATE);
-  } else if (tokenSymbol === 'wARS') {
-    const usd = tokenAmount / 1050;
-    return Math.round(usd * USD_TO_COP_RATE);
   }
   return Math.round(tokenAmount * USD_TO_COP_RATE);
 }
@@ -117,7 +128,7 @@ export function buildRipioRampUrl(
 
   const params = new URLSearchParams({
     country: country || 'CO',
-    chain: CELO_CHAIN_ID.toString(),
+    chain: BSC_CHAIN_ID.toString(),
     token: token?.ripioToken || 'USDT',
     amount: finalAmount > 0 ? finalAmount.toString() : '50000',
   });
@@ -130,8 +141,8 @@ export function buildRipioRampUrl(
 }
 
 export const publicClient = createPublicClient({
-  chain: celo,
-  transport: http(CELO_RPC),
+  chain: bsc,
+  transport: http(BSC_RPC),
 });
 
 export const ERC20_ABI = parseAbi([
@@ -150,7 +161,7 @@ export const VAULT_DEPOSIT_ABI = parseAbi([
  */
 export function getViemWalletClient(provider: any) {
   return createWalletClient({
-    chain: celo,
+    chain: bsc,
     transport: custom(provider),
   });
 }
@@ -177,7 +188,7 @@ export async function fetchTokenAllowance(
 }
 
 /**
- * Read the live on-chain token balance of a user on Celo Mainnet
+ * Read the live on-chain token balance of a user on BNB Chain
  */
 export async function fetchOnChainTokenBalance(
   userAddress: string,

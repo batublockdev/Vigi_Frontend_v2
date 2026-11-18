@@ -52,6 +52,10 @@ export default function OnboardingPage() {
   const [infoToken, setInfoToken] = useState<string | null>(null);
   const [investorType, setInvestorType] = useState<string | null>(null);
   const [showAllTokens, setShowAllTokens] = useState(false);
+  const [tokenPage, setTokenPage] = useState(0);
+  const [riskPage, setRiskPage] = useState(0);
+  const TOKENS_PER_PAGE = 8;
+  const RISK_PER_PAGE = 6;
 
   useEffect(() => {
     const stored = localStorage.getItem('vigi_user_profile');
@@ -113,6 +117,7 @@ export default function OnboardingPage() {
       });
       setTokenConfigs(nc);
     }
+    if (step === 4) setRiskPage(0);
   }, [step]); // eslint-disable-line
 
   const handleAllocationChange = (changed: string, newValue: number) => {
@@ -142,6 +147,8 @@ export default function OnboardingPage() {
     const type = INVESTOR_TYPES.find(it => it.id === investorType);
     return type && type.tokens.includes(t.symbol);
   });
+  const totalPages = Math.ceil(tokensToShow.length / TOKENS_PER_PAGE);
+  const paginatedTokens = tokensToShow.slice(tokenPage * TOKENS_PER_PAGE, (tokenPage + 1) * TOKENS_PER_PAGE);
 
   return (
     <div className="h-screen bg-[#F5F5F4] text-[#0C1424] flex flex-col overflow-hidden">
@@ -252,7 +259,7 @@ export default function OnboardingPage() {
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 pb-2">
-                  {tokensToShow.map((token) => {
+                  {paginatedTokens.map((token) => {
                     const isSelected = selectedTokens.includes(token.symbol);
                     return (
                       <div key={token.symbol} className="relative">
@@ -292,15 +299,41 @@ export default function OnboardingPage() {
                     );
                   })}
                 </div>
-                {!showAllTokens ? (
-                  <button onClick={() => setShowAllTokens(true)} className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-stone-300 py-3 text-[10px] font-medium uppercase tracking-wider text-ink-muted hover:border-[#2540EB] hover:text-[#2540EB] transition-colors" style={{ fontFamily: 'var(--font-inter)' }}>
-                    <Plus className="h-3.5 w-3.5" /><span>Añadir mas tokens</span>
-                  </button>
-                ) : (
-                  <button onClick={() => setShowAllTokens(false)} className="w-full mt-2 flex items-center justify-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-ink-muted hover:text-[#0C1424] transition-colors" style={{ fontFamily: 'var(--font-inter)' }}>
-                    <span>Ver solo recomendados</span>
-                  </button>
-                )}
+                {/* Pagination controls */}
+                <div className="flex items-center justify-between mt-2 pb-2">
+                  <div className="flex items-center gap-2">
+                    {!showAllTokens ? (
+                      <button onClick={() => { setShowAllTokens(true); setTokenPage(0); }} className="flex items-center gap-1.5 rounded-xl border border-dashed border-stone-300 px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-ink-muted hover:border-[#2540EB] hover:text-[#2540EB] transition-colors" style={{ fontFamily: 'var(--font-inter)' }}>
+                        <Plus className="h-3.5 w-3.5" /><span>Añadir mas</span>
+                      </button>
+                    ) : (
+                      <button onClick={() => { setShowAllTokens(false); setTokenPage(0); }} className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-ink-muted hover:text-[#0C1424] transition-colors" style={{ fontFamily: 'var(--font-inter)' }}>
+                        <span>Solo recomendados</span>
+                      </button>
+                    )}
+                  </div>
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setTokenPage(Math.max(0, tokenPage - 1))}
+                        disabled={tokenPage === 0}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="text-[10px] font-medium text-ink-muted tabular-nums" style={{ fontFamily: 'var(--font-inter)' }}>
+                        {tokenPage + 1} / {totalPages}
+                      </span>
+                      <button
+                        onClick={() => setTokenPage(Math.min(totalPages - 1, tokenPage + 1))}
+                        disabled={tokenPage === totalPages - 1}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
               <div className="shrink-0 flex items-center gap-2 pt-3 border-t border-stone-200/60 text-[10px] text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>
                 <span className="h-1.5 w-1.5 rounded-full bg-[#2540EB]" /><span>{selectedTokens.length} seleccionado{selectedTokens.length !== 1 ? 's' : ''}</span>
@@ -308,8 +341,11 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* STEP 4: Risk — tabla compacta sin scroll */}
-          {step === 4 && (
+          {/* STEP 4: Risk — tabla con paginacion */}
+          {step === 4 && (() => {
+            const riskTotalPages = Math.ceil(selectedTokenObjs.length / RISK_PER_PAGE);
+            const riskPaginated = selectedTokenObjs.slice(riskPage * RISK_PER_PAGE, (riskPage + 1) * RISK_PER_PAGE);
+            return (
             <div className="flex-1 flex flex-col min-h-0">
               <div className="mb-3">
                 <h2 className="font-serif-display text-2xl font-medium tracking-tight text-[#0C1424] mb-1">Configura tu riesgo</h2>
@@ -324,8 +360,8 @@ export default function OnboardingPage() {
                 </div>
                 {/* Rows */}
                 <div className="flex-1 overflow-hidden">
-                  <div className="h-full overflow-y-auto">
-                    {selectedTokenObjs.map((token) => {
+                  <div className="h-full">
+                    {riskPaginated.map((token) => {
                       const config = tokenConfigs[token.symbol] || { stopLossPct: 5, takeProfitPct: 10, allocationPct: 0 };
                       return (
                         <div key={token.symbol} className="grid grid-cols-[1fr_90px_90px] gap-2 items-center px-3 py-2 border-b border-stone-100 hover:bg-stone-50/50 transition">
@@ -357,9 +393,39 @@ export default function OnboardingPage() {
                     })}
                   </div>
                 </div>
+                {/* Pagination controls */}
+                {riskTotalPages > 1 && (
+                  <div className="shrink-0 flex items-center justify-between pt-3 border-t border-stone-200/60">
+                    <div className="flex items-center gap-2 text-[10px] text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#2540EB]" />
+                      <span>{selectedTokens.length} tokens · config {riskPage + 1}-{Math.min((riskPage + 1) * RISK_PER_PAGE, selectedTokenObjs.length)} de {selectedTokenObjs.length}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setRiskPage(Math.max(0, riskPage - 1))}
+                        disabled={riskPage === 0}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                      </button>
+                      <span className="text-[10px] font-medium text-ink-muted tabular-nums" style={{ fontFamily: 'var(--font-inter)' }}>
+                        {riskPage + 1} / {riskTotalPages}
+                      </span>
+                      <button
+                        onClick={() => setRiskPage(Math.min(riskTotalPages - 1, riskPage + 1))}
+                        disabled={riskPage === riskTotalPages - 1}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed"
+                      >
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
-          )}
+            );
+          })()}
+
 
           {/* STEP 5: Distribucion — lista compacta sin scroll */}
           {step === 5 && (

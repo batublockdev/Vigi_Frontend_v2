@@ -68,6 +68,26 @@ export const CeloLogo: React.FC<{ className?: string }> = ({ className = 'h-7 w-
   </svg>
 );
 
+export const UsdcLogo: React.FC<{ className?: string }> = ({ className = 'h-7 w-7' }) => (
+  <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="16" fill="#2775CA" />
+    <path
+      d="M16 8C11.5817 8 8 11.5817 8 16C8 20.4183 11.5817 24 16 24C20.4183 24 24 20.4183 24 16C24 11.5817 20.4183 8 16 8ZM14.2 12.8C13.4268 12.8 12.8 13.4268 12.8 14.2V17.8C12.8 18.5732 13.4268 19.2 14.2 19.2H17.8C18.5732 19.2 19.2 18.5732 19.2 17.8V14.2C19.2 13.4268 18.5732 12.8 17.8 12.8H14.2Z"
+      fill="#FFFFFF"
+    />
+  </svg>
+);
+
+export const BnbLogo: React.FC<{ className?: string }> = ({ className = 'h-7 w-7' }) => (
+  <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="16" fill="#F0B90B" />
+    <path
+      d="M16 6l3.5 3.5-7 7L9 13l7-7zm7 7l3.5 3.5L16 27l-3.5-3.5L16 20l7-7z"
+      fill="#FFFFFF"
+    />
+  </svg>
+);
+
 export const MetaMaskLogo: React.FC<{ className?: string }> = ({ className = 'h-6 w-6' }) => (
   <svg className={className} viewBox="0 0 318.6 318.6" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path fill="#E2761B" stroke="#E2761B" strokeMiterlimit="10" d="M274.1 35.5l-99.5 73.9L194 65.4z" />

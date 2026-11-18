@@ -5,9 +5,7 @@ import {
   BtcLogo,
   EthLogo,
   UsdtLogo,
-  WbrlLogo,
-  WarsLogo,
-  CeloLogo,
+  UsdcLogo,
   MetaMaskLogo,
 } from './CoinLogos';
 import {
@@ -53,12 +51,12 @@ export const InvestModal: React.FC<InvestModalProps> = ({
   const [isConnecting, setIsConnecting] = useState<boolean>(false);
   const [walletError, setWalletError] = useState<string | null>(null);
 
-  // Deposit Token Selection (USDT, wBRL, wARS)
+  // Deposit Token Selection (USDT, USDC — BSC)
   const [selectedToken, setSelectedToken] = useState<SupportedDepositToken>('USDT');
   const [tokenBalance, setTokenBalance] = useState<number | null>(null);
   const [isCheckingBalance, setIsCheckingBalance] = useState<boolean>(false);
 
-  // Country for Ripio Ramp - Defaults to Colombia (CO) as requested
+  // Country for Ripio Ramp - Defaults to Colombia (CO)
   const [country, setCountry] = useState<string>('CO');
 
   // Amount
@@ -125,11 +123,11 @@ export const InvestModal: React.FC<InvestModalProps> = ({
 
       setWalletAddress(accounts[0]);
 
-      // Ensure user is on Celo Mainnet (Chain ID 42220 / 0xa4ec)
+      // Ensure user is on BNB Chain (Chain ID 56 / 0x38)
       try {
         await provider.request({
           method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0xa4ec' }],
+          params: [{ chainId: '0x38' }],
         });
       } catch (switchError: any) {
         if (switchError.code === 4902) {
@@ -137,11 +135,11 @@ export const InvestModal: React.FC<InvestModalProps> = ({
             method: 'wallet_addEthereumChain',
             params: [
               {
-                chainId: '0xa4ec',
-                chainName: 'Celo Mainnet',
-                nativeCurrency: { name: 'CELO', symbol: 'CELO', decimals: 18 },
-                rpcUrls: ['https://forno.celo.org'],
-                blockExplorerUrls: ['https://celoscan.io'],
+                chainId: '0x38',
+                chainName: 'BNB Smart Chain',
+                nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+                rpcUrls: ['https://bsc-dataseed.binance.org'],
+                blockExplorerUrls: ['https://bscscan.com'],
               },
             ],
           });
@@ -173,7 +171,6 @@ export const InvestModal: React.FC<InvestModalProps> = ({
       if (accounts && accounts.length > 0) {
         setWalletAddress(accounts[0]);
       } else if (!hasAutoAttemptedRef.current) {
-        // Trigger MetaMask directly upon opening Add Funds if not connected
         hasAutoAttemptedRef.current = true;
         connectMetaMask();
       }
@@ -182,7 +179,6 @@ export const InvestModal: React.FC<InvestModalProps> = ({
     }
   }, [connectMetaMask]);
 
-  // When modal opens, connect directly to MetaMask
   useEffect(() => {
     if (isOpen) {
       checkExistingConnection();
@@ -191,7 +187,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({
     }
   }, [isOpen, checkExistingConnection]);
 
-  // Listen for account and network changes in MetaMask
+  // Listen for account changes in MetaMask
   useEffect(() => {
     const provider = getMetaMaskProvider();
     if (provider && provider.on) {
@@ -278,11 +274,11 @@ export const InvestModal: React.FC<InvestModalProps> = ({
     setDepositStatus('checking');
 
     try {
-      // 1. Ensure user is on Celo Mainnet (Chain ID 42220 / 0xa4ec)
+      // 1. Ensure user is on BNB Chain (Chain ID 56 / 0x38)
       try {
         await provider.request({
           method: 'wallet_switchEthereumChain',
-          params: [{ chainId: '0xa4ec' }],
+          params: [{ chainId: '0x38' }],
         });
       } catch (switchError: any) {
         if (switchError.code === 4902) {
@@ -290,11 +286,11 @@ export const InvestModal: React.FC<InvestModalProps> = ({
             method: 'wallet_addEthereumChain',
             params: [
               {
-                chainId: '0xa4ec',
-                chainName: 'Celo Mainnet',
-                nativeCurrency: { name: 'CELO', symbol: 'CELO', decimals: 18 },
-                rpcUrls: ['https://forno.celo.org'],
-                blockExplorerUrls: ['https://celoscan.io'],
+                chainId: '0x38',
+                chainName: 'BNB Smart Chain',
+                nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+                rpcUrls: ['https://bsc-dataseed.binance.org'],
+                blockExplorerUrls: ['https://bscscan.com'],
               },
             ],
           });
@@ -344,7 +340,6 @@ export const InvestModal: React.FC<InvestModalProps> = ({
       }
 
       // Step 2: Call depositAsset(address _token, uint256 _amount, bytes _path)
-      // Selector: 0x530f19ed, _path: '0x' for auto-detection
       setDepositStatus('depositing');
 
       const depositHash = await walletClient.writeContract({
@@ -366,7 +361,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({
         setDepositStatus('success');
         await updateBalance();
       } else {
-        throw new Error('Deposit transaction reverted on Celo.');
+        throw new Error('Deposit transaction reverted on BNB Chain.');
       }
     } catch (err: any) {
       console.error('Error during deposit flow:', err);
@@ -387,7 +382,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Exact allocation formula: 78% Tokens (39% ETH, 39% BTC), 20% AI Agent, 2% Gas
+  // Allocation: 78% Tokens, 20% AI Agent, 2% Gas
   const gasAmount = numAmount * 0.02;
   const agentAmount = numAmount * 0.20;
   const tokensAmount = numAmount * 0.78;
@@ -399,7 +394,6 @@ export const InvestModal: React.FC<InvestModalProps> = ({
     tokenBalance !== null &&
     (tokenBalance < numAmount || numAmount <= 0);
 
-  // Dynamic Ripio Ramp URL: amount expressed in Colombian Pesos (COP) for Colombia (CO)
   const ripioRampUrl = buildRipioRampUrl(
     selectedToken,
     numAmount,
@@ -418,7 +412,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({
               Add Funds to AI Portfolio
             </h3>
             <p className="text-[11px] text-slate-500">
-              Automated allocation with on-chain verification
+              Automated allocation on BNB Chain
             </p>
           </div>
           <button
@@ -430,7 +424,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({
         </div>
 
         <div className="mt-4 space-y-4">
-          {/* DIRECT METAMASK CONNECTION STRIP (SAVES SPACE) */}
+          {/* METAMASK CONNECTION */}
           {walletAddress ? (
             <div className="flex items-center justify-between rounded-xl bg-slate-50 border border-slate-200/80 px-3 py-2 text-xs">
               <div className="flex items-center gap-2">
@@ -438,8 +432,8 @@ export const InvestModal: React.FC<InvestModalProps> = ({
                 <span className="font-mono text-slate-800 text-[11px] font-bold">
                   {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
                 </span>
-                <span className="rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.2">
-                  Celo
+                <span className="rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.2">
+                  BNB Chain
                 </span>
               </div>
               <button
@@ -489,7 +483,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {/* USDT */}
               <button
                 type="button"
@@ -504,32 +498,18 @@ export const InvestModal: React.FC<InvestModalProps> = ({
                 <span className="text-xs font-bold">USDT</span>
               </button>
 
-              {/* wBRL */}
+              {/* USDC */}
               <button
                 type="button"
-                onClick={() => setSelectedToken('wBRL')}
+                onClick={() => setSelectedToken('USDC')}
                 className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border transition ${
-                  selectedToken === 'wBRL'
+                  selectedToken === 'USDC'
                     ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-xs'
                     : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
                 }`}
               >
-                <WbrlLogo className="h-4 w-4" />
-                <span className="text-xs font-bold">wBRL</span>
-              </button>
-
-              {/* wARS */}
-              <button
-                type="button"
-                onClick={() => setSelectedToken('wARS')}
-                className={`flex items-center justify-center gap-1.5 p-2 rounded-xl border transition ${
-                  selectedToken === 'wARS'
-                    ? 'border-emerald-600 bg-emerald-50 text-emerald-950 font-bold shadow-xs'
-                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
-                }`}
-              >
-                <WarsLogo className="h-4 w-4" />
-                <span className="text-xs font-bold">wARS</span>
+                <UsdcLogo className="h-4 w-4" />
+                <span className="text-xs font-bold">USDC</span>
               </button>
             </div>
           </div>
@@ -601,7 +581,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({
               ))}
             </div>
 
-            {/* COMPACT SPACE-SAVING BUY ON RIPIO BAR */}
+            {/* BUY ON RIPIO BAR */}
             {hasInsufficientBalance && (
               <div className="mt-2.5 flex items-center justify-between rounded-xl bg-amber-50 border border-amber-200/90 px-3 py-2 text-xs">
                 <div className="min-w-0 pr-2">
@@ -674,7 +654,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({
             {/* 3. Gas (2%) */}
             <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200/40">
               <div className="flex items-center gap-1">
-                <CeloLogo className="h-3 w-3" />
+                <span className="text-amber-600 text-xs">⛽</span>
                 <span className="font-bold text-slate-700">3. Gas Reserve (2%)</span>
               </div>
               <span className="font-bold font-mono text-amber-700">
@@ -696,12 +676,12 @@ export const InvestModal: React.FC<InvestModalProps> = ({
               {depositTxHash && (
                 <div className="pt-1">
                   <a
-                    href={`https://celoscan.io/tx/${depositTxHash}`}
+                    href={`https://bscscan.com/tx/${depositTxHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:text-emerald-900 underline font-mono"
                   >
-                    <span>View on Celoscan</span>
+                    <span>View on BscScan</span>
                     <ExternalLink className="h-3 w-3" />
                   </a>
                 </div>
@@ -716,9 +696,9 @@ export const InvestModal: React.FC<InvestModalProps> = ({
                   <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
                   {depositStatus === 'checking' && 'Verifying on-chain token allowance...'}
                   {depositStatus === 'approving' && 'Step 1/2: Please approve token spending in MetaMask...'}
-                  {depositStatus === 'waiting-approval' && 'Step 1/2: Waiting for approval confirmation on Celo...'}
+                  {depositStatus === 'waiting-approval' && 'Step 1/2: Waiting for approval confirmation on BNB Chain...'}
                   {depositStatus === 'depositing' && 'Step 2/2: Please confirm depositAsset in MetaMask...'}
-                  {depositStatus === 'waiting-deposit' && 'Step 2/2: Confirming depositAsset transaction on Celo...'}
+                  {depositStatus === 'waiting-deposit' && 'Step 2/2: Confirming depositAsset transaction on BNB Chain...'}
                 </span>
               </div>
               <div className="w-full bg-blue-200/60 rounded-full h-1.5 overflow-hidden">

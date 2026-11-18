@@ -178,17 +178,11 @@ export default function OnboardingPage() {
       setWalletAddress(addr);
       await switchToBSC(provider);
 
-      // Load existing profile
+      // Always start at step 2 — load any saved data but don't skip steps
       setLoadingProfile(true);
-      const found = loadProfile(addr);
+      loadProfile(addr);
       setLoadingProfile(false);
-
-      if (found) {
-        // Profile exists — skip to step 7 (Empezar) to show resume
-        setStep(7);
-      } else {
-        setStep(2);
-      }
+      setStep(2);
     } catch (err: any) {
       if (err.code === 4001) {
         setWalletError('Conexion cancelada.');
@@ -209,13 +203,9 @@ export default function OnboardingPage() {
         const addr = accounts[0];
         setWalletAddress(addr);
         setLoadingProfile(true);
-        const found = loadProfile(addr);
+        loadProfile(addr);
         setLoadingProfile(false);
-        if (found) {
-          setStep(7);
-        } else {
-          setStep(2);
-        }
+        // Stay on step 1 — user must click Connect to advance
       }
     }).catch(() => {});
   }, [loadProfile]);
@@ -229,17 +219,10 @@ export default function OnboardingPage() {
           const addr = accounts[0];
           setWalletAddress(addr);
           setLoadingProfile(true);
-          const found = loadProfile(addr);
+          loadProfile(addr);
           setLoadingProfile(false);
-          if (found) {
-            setStep(7);
-          } else {
-            setStep(2);
-            setName('');
-            setSelectedTokens([]);
-            setTokenConfigs({});
-            setInvestorType(null);
-          }
+          // Reset to step 1 on account change
+          setStep(1);
         } else {
           setWalletAddress(null);
           setStep(1);
@@ -731,40 +714,27 @@ export default function OnboardingPage() {
                   </div>
                 </div>
               </div>
-              <div className="shrink-0 pt-3 space-y-2.5">
-                <button
-                  onClick={handleStart}
-                  className="w-full rounded-xl bg-[#2540EB] hover:bg-[#1A33D0] active:scale-[0.98] transition-all text-white text-sm font-bold py-3.5"
-                  style={{ fontFamily: 'var(--font-inter)' }}
-                >
-                  Empezar
-                </button>
-                {selectedTokenObjs.length > 0 && (
-                  <button
-                    onClick={() => setStep(4)}
-                    className="w-full rounded-xl border border-stone-200 bg-white hover:bg-stone-50 active:scale-[0.98] transition-all text-[#0C1424] text-xs font-semibold py-2.5"
-                    style={{ fontFamily: 'var(--font-inter)' }}
-                  >
-                    Editar tokens
-                  </button>
-                )}
-              </div>
+
             </div>
           )}
 
         </div>
       </div>
 
-      {/* Navigation */}
-      {step > 1 && step < 7 && (
+      {/* Navigation — visible on all steps */}
+      {step > 1 && (
         <div className="shrink-0 border-t border-stone-200/60 bg-[#F5F5F4]">
           <div className="mx-auto max-w-4xl flex items-center justify-between px-6 py-3">
-            <button onClick={prevStep} disabled={step === 1} className="flex items-center gap-1.5 text-[10px] font-medium text-ink-muted hover:text-[#0C1424] transition-colors disabled:opacity-30 disabled:cursor-not-allowed" style={{ fontFamily: 'var(--font-inter)' }}>
+            <button onClick={prevStep} className="flex items-center gap-1.5 text-[10px] font-medium text-ink-muted hover:text-[#0C1424] transition-colors" style={{ fontFamily: 'var(--font-inter)' }}>
               <ArrowLeft className="h-3.5 w-3.5" /><span>Anterior</span>
             </button>
-            {step < 7 && (
+            {step < 7 ? (
               <button onClick={nextStep} disabled={!canProceed()} className="flex items-center gap-1.5 rounded-xl bg-[#0C1424] hover:bg-[#1A2235] active:scale-[0.98] transition-all text-white text-[10px] font-semibold px-5 py-2.5 disabled:opacity-30 disabled:cursor-not-allowed" style={{ fontFamily: 'var(--font-inter)' }}>
                 <span>Siguiente</span><ArrowRight className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <button onClick={handleStart} className="flex items-center gap-1.5 rounded-xl bg-[#2540EB] hover:bg-[#1A33D0] active:scale-[0.98] transition-all text-white text-[10px] font-semibold px-5 py-2.5" style={{ fontFamily: 'var(--font-inter)' }}>
+                <span>Empezar</span><Check className="h-3.5 w-3.5" />
               </button>
             )}
           </div>

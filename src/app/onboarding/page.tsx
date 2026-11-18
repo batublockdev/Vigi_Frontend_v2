@@ -292,18 +292,30 @@ export default function OnboardingPage() {
     const currentOthers = others.reduce((sum, s) => sum + (tokenConfigs[s]?.allocationPct || 0), 0);
     const remaining = 100 - clamped;
     const nc = { ...tokenConfigs };
-    if (others.length === 0) { nc[changed] = { ...nc[changed], allocationPct: 100 }; }
-    else if (currentOthers === 0) {
+
+    if (others.length === 0) {
+      nc[changed] = { ...nc[changed], allocationPct: 100 };
+    } else if (currentOthers === 0) {
+      // Others are all 0 — distribute equally
       const eq = Math.floor(remaining / others.length);
       const r = remaining - eq * others.length;
       others.forEach((s, i) => { nc[s] = { ...nc[s], allocationPct: eq + (i === 0 ? r : 0) }; });
       nc[changed] = { ...nc[changed], allocationPct: clamped };
     } else {
+      // Scale others proportionally to fill remaining
       const ratio = remaining / currentOthers;
       let alloc = 0;
-      others.forEach((s) => { const rd = Math.floor((tokenConfigs[s]?.allocationPct || 0) * ratio); alloc += rd; nc[s] = { ...nc[s], allocationPct: rd }; });
+      others.forEach((s) => {
+        const rd = Math.floor((tokenConfigs[s]?.allocationPct || 0) * ratio);
+        alloc += rd;
+        nc[s] = { ...nc[s], allocationPct: rd };
+      });
+      // Assign dust to last token
       const dust = remaining - alloc;
-      if (others.length > 0) { const last = others[others.length - 1]; nc[last] = { ...nc[last], allocationPct: (nc[last].allocationPct || 0) + dust }; }
+      if (others.length > 0) {
+        const last = others[others.length - 1];
+        nc[last] = { ...nc[last], allocationPct: (nc[last].allocationPct || 0) + dust };
+      }
       nc[changed] = { ...nc[changed], allocationPct: clamped };
     }
     setTokenConfigs(nc);
@@ -629,36 +641,154 @@ export default function OnboardingPage() {
             <div className="flex-1 flex flex-col min-h-0">
               <div className="mb-3">
                 <h2 className="font-serif-display text-2xl font-medium tracking-tight text-[#0C1424] mb-1">Distribuye tu capital</h2>
-                <p className="text-xs text-ink-light" style={{ fontFamily: 'var(--font-inter)' }}>Mueve los sliders. El total siempre suma 100%.</p>
+                <p className="text-xs text-ink-light" style={{ fontFamily: 'var(--font-inter)' }}>Arrastra los sliders para asignar el porcentaje. El total debe sumar 100%.</p>
               </div>
-              <div className="shrink-0 rounded-xl border border-stone-200 bg-white px-4 py-2.5 mb-2">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>Total</span>
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => { const eq = Math.floor(100 / selectedTokens.length); const r = 100 - eq * selectedTokens.length; const nc = { ...tokenConfigs }; selectedTokens.forEach((sym, i) => { nc[sym] = { ...nc[sym], allocationPct: eq + (i === 0 ? r : 0) }; }); setTokenConfigs(nc); }} className="text-[9px] font-medium uppercase tracking-wider text-[#2540EB] hover:text-[#0C1424] transition-colors" style={{ fontFamily: 'var(--font-inter)' }}>Equitativo</button>
-                    <span className="text-xs font-bold text-green-600" style={{ fontFamily: 'var(--font-inter)' }}>{totalAllocation}%</span>
+
+              {/* Barra de total + boton equitativo */}
+              <div className="shrink-0 rounded-xl border border-stone-200 bg-white px-4 py-3 mb-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>Distribucion total</span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => {
+                        const eq = Math.floor(100 / selectedTokens.length);
+                        const r = 100 - eq * selectedTokens.length;
+                        const nc = { ...tokenConfigs };
+                        selectedTokens.forEach((sym, i) => {
+                          nc[sym] = { ...nc[sym], allocationPct: eq + (i === 0 ? r : 0) };
+                        });
+                        setTokenConfigs(nc);
+                      }}
+                      className="rounded-lg bg-[#2540EB]/5 border border-[#2540EB]/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-[#2540EB] hover:bg-[#2540EB]/10 transition-colors"
+                      style={{ fontFamily: 'var(--font-inter)' }}
+                    >
+                      Distribuir equitativo
+                    </button>
+                    <span
+                      className={`text-sm font-bold tabular-nums ${Math.abs(totalAllocation - 100) < 0.01 ? 'text-green-600' : 'text-red-500'}`}
+                      style={{ fontFamily: 'var(--font-inter)' }}
+                    >
+                      {totalAllocation}%
+                    </span>
                   </div>
                 </div>
-                <div className="flex h-2 rounded-full overflow-hidden bg-stone-100">
-                  {selectedTokenObjs.map((token) => { const pct = tokenConfigs[token.symbol]?.allocationPct || 0; if (pct === 0) return null; return <div key={token.symbol} style={{ width: `${pct}%`, backgroundColor: token.color }} className="transition-all duration-200" />; })}
-                </div>
-              </div>
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <div className="h-full overflow-y-auto">
+                {/* Barra stacking horizontal */}
+                <div className="flex h-3 rounded-full overflow-hidden bg-stone-100 gap-px">
                   {selectedTokenObjs.map((token) => {
-                    const config = tokenConfigs[token.symbol] || { stopLossPct: 5, takeProfitPct: 10, allocationPct: 0 };
+                    const pct = tokenConfigs[token.symbol]?.allocationPct || 0;
+                    if (pct === 0) return null;
                     return (
-                      <div key={token.symbol} className="flex items-center gap-3 px-2 py-1.5 border-b border-stone-100 hover:bg-stone-50/50 transition">
-                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[8px] font-bold text-white" style={{ backgroundColor: token.color }}>{token.symbol.slice(0, 2)}</div>
-                        <span className="text-[11px] font-semibold text-[#0C1424] w-16 shrink-0 truncate" style={{ fontFamily: 'var(--font-inter)' }}>{token.symbol}</span>
-                        <span className="text-[7px] font-medium uppercase tracking-wider rounded px-1 py-0.5 text-white shrink-0" style={{ backgroundColor: CHAIN_COLORS[token.chain] || '#999' }}>{token.chain}</span>
-                        <input type="range" min="0" max="100" value={config.allocationPct} onChange={(e) => handleAllocationChange(token.symbol, parseInt(e.target.value))} className="flex-1 accent-[#2540EB] cursor-pointer min-w-0" />
-                        <span className="text-[11px] font-bold text-[#0C1424] tabular-nums w-10 text-right shrink-0" style={{ fontFamily: 'var(--font-inter)' }}>{config.allocationPct}%</span>
+                      <div
+                        key={token.symbol}
+                        style={{ width: `${pct}%`, backgroundColor: token.color }}
+                        className="transition-all duration-300 relative group"
+                        title={`${token.symbol}: ${pct}%`}
+                      />
+                    );
+                  })}
+                </div>
+                {/* Leyenda debajo de la barra */}
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                  {selectedTokenObjs.map((token) => {
+                    const pct = tokenConfigs[token.symbol]?.allocationPct || 0;
+                    return (
+                      <div key={token.symbol} className="flex items-center gap-1">
+                        <span className="h-2 w-2 rounded-sm" style={{ backgroundColor: token.color }} />
+                        <span className="text-[9px] font-medium text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>{token.symbol} {pct}%</span>
                       </div>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Cards de tokens con sliders */}
+              <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="space-y-2.5 pb-2">
+                  {selectedTokenObjs.map((token) => {
+                    const config = tokenConfigs[token.symbol] || { stopLossPct: 5, takeProfitPct: 10, allocationPct: 0 };
+                    const pct = config.allocationPct;
+                    return (
+                      <div
+                        key={token.symbol}
+                        className="rounded-xl border border-stone-200 bg-white p-3.5 hover:border-stone-300 transition"
+                      >
+                        {/* Fila superior: icono + nombre + % */}
+                        <div className="flex items-center justify-between mb-2.5">
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                              style={{ backgroundColor: token.color }}
+                            >
+                              {token.symbol.slice(0, 2)}
+                            </div>
+                            <div>
+                              <div className="text-xs font-bold text-[#0C1424]" style={{ fontFamily: 'var(--font-inter)' }}>
+                                {token.symbol}
+                              </div>
+                              <div className="text-[9px] text-ink-muted truncate max-w-[140px]" style={{ fontFamily: 'var(--font-inter)' }}>
+                                {token.name}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              value={pct}
+                              onChange={(e) => handleAllocationChange(token.symbol, Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                              className="w-12 rounded-lg border border-stone-200 bg-stone-50 text-center text-sm font-bold text-[#0C1424] outline-none focus:border-[#2540EB] focus:bg-white py-1"
+                              style={{ fontFamily: 'var(--font-inter)' }}
+                            />
+                            <span className="text-sm font-bold text-ink-muted">%</span>
+                          </div>
+                        </div>
+
+                        {/* Slider */}
+                        <div className="relative">
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={pct}
+                            onChange={(e) => handleAllocationChange(token.symbol, parseInt(e.target.value))}
+                            className="w-full accent-[#2540EB] cursor-pointer"
+                            style={{ height: '6px' }}
+                          />
+                          {/* Track visual personalizado */}
+                          <div className="absolute top-1/2 left-0 right-0 -translate-y-1/2 h-1.5 rounded-full bg-stone-100 pointer-events-none -z-10">
+                            <div
+                              className="h-full rounded-full transition-all duration-150"
+                              style={{ width: `${pct}%`, backgroundColor: token.color }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Info de riesgo debajo */}
+                        <div className="flex items-center gap-3 mt-2 pt-2 border-t border-stone-100">
+                          <span className="text-[9px] font-medium text-red-500" style={{ fontFamily: 'var(--font-inter)' }}>
+                            SL {config.stopLossPct}%
+                          </span>
+                          <span className="text-[9px] font-medium text-green-600" style={{ fontFamily: 'var(--font-inter)' }}>
+                            TP {config.takeProfitPct}%
+                          </span>
+                          <span className="text-[8px] font-medium uppercase tracking-wider rounded px-1.5 py-0.5 text-white ml-auto" style={{ backgroundColor: CHAIN_COLORS[token.chain] || '#999' }}>
+                            {token.chain}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Aviso si no suma 100% */}
+              {Math.abs(totalAllocation - 100) >= 0.01 && (
+                <div className="shrink-0 flex items-center gap-2 pt-2 border-t border-amber-200/60 text-[10px] text-amber-700" style={{ fontFamily: 'var(--font-inter)' }}>
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  <span>El total debe sumar 100%. Actualmente: {totalAllocation}%</span>
+                </div>
+              )}
             </div>
           )}
 

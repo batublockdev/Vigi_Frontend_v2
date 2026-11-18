@@ -33,6 +33,7 @@ interface UserProfile {
   tokens: TokenConfig[];
   depositAmount: string;
   depositToken: string;
+  lastStep: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -97,11 +98,12 @@ export default function OnboardingPage() {
   const [riskPage, setRiskPage] = useState(0);
   const [loadingProfile, setLoadingProfile] = useState(false);
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(false); // blocks auto-save during load
   const TOKENS_PER_PAGE = 8;
   const RISK_PER_PAGE = 6;
 
   // ---- Load profile by wallet address ----
-  const loadProfile = useCallback((addr: string) => {
+  const loadProfile = useCallback((addr: string): number => {
     const key = `vigi_profile_${addr.toLowerCase()}`;
     const stored = localStorage.getItem(key);
     if (stored) {
@@ -119,22 +121,22 @@ export default function OnboardingPage() {
         });
         setTokenConfigs(configs);
         setProfileLoaded(true);
-        return true;
+        return profile.lastStep || 2;
       } catch (e) {
-        return false;
+        return 0;
       }
     }
-    return false;
+    return 0;
   }, []);
 
   // ---- Save profile by wallet address ----
   const saveProfile = useCallback(() => {
-    if (!walletAddress) return;
+    if (!walletAddress || isLoadingProfile) return;
     const selectedTokenObjs = ALL_TOKENS.filter(t => selectedTokens.includes(t.symbol));
     const key = `vigi_profile_${walletAddress.toLowerCase()}`;
     const existing = localStorage.getItem(key);
     const createdAt = existing
-      ? (JSON.parse(existing) as UserProfile).createdAt
+      ? (() => { try { return (JSON.parse(existing) as UserProfile).createdAt; } catch { return new Date().toISOString(); } })()
       : new Date().toISOString();
 
     const profile: UserProfile = {
@@ -147,18 +149,19 @@ export default function OnboardingPage() {
         allocationPct: tokenConfigs[t.symbol]?.allocationPct || 0,
       })),
       depositAmount: '', depositToken: 'USDT',
+      lastStep: step,
       createdAt,
       updatedAt: new Date().toISOString(),
     };
     localStorage.setItem(key, JSON.stringify(profile));
-  }, [walletAddress, name, selectedTokens, tokenConfigs]);
+  }, [walletAddress, name, selectedTokens, tokenConfigs, step, isLoadingProfile]);
 
-  // ---- Auto-save on every change after wallet connected ----
+  // ---- Auto-save on every change after wallet connected (but not while loading) ----
   useEffect(() => {
-    if (walletAddress && step > 1) {
+    if (walletAddress && !isLoadingProfile) {
       saveProfile();
     }
-  }, [name, selectedTokens, tokenConfigs, step, walletAddress, saveProfile]);
+  }, [name, selectedTokens, tokenConfigs, step, walletAddress, isLoadingProfile, saveProfile]);
 
   // ---- Connect MetaMask ----
   const connectMetaMask = useCallback(async () => {
@@ -178,11 +181,16 @@ export default function OnboardingPage() {
       setWalletAddress(addr);
       await switchToBSC(provider);
 
-      // Always start at step 2 — load any saved data but don't skip steps
+      // Load saved profile and resume where they left off
+      setIsLoadingProfile(true);
       setLoadingProfile(true);
-      loadProfile(addr);
+      const lastStep = loadProfile(addr);
       setLoadingProfile(false);
-      setStep(2);
+      // Use setTimeout to ensure state updates from loadProfile are applied before step change
+      setTimeout(() => {
+        setIsLoadingProfile(false);
+        setStep(lastStep > 1 ? lastStep : 2);
+      }, 0);
     } catch (err: any) {
       if (err.code === 4001) {
         setWalletError('Conexion cancelada.');
@@ -202,10 +210,14 @@ export default function OnboardingPage() {
       if (accounts && accounts.length > 0) {
         const addr = accounts[0];
         setWalletAddress(addr);
+        setIsLoadingProfile(true);
         setLoadingProfile(true);
-        loadProfile(addr);
+        const lastStep = loadProfile(addr);
         setLoadingProfile(false);
-        // Stay on step 1 — user must click Connect to advance
+        setTimeout(() => {
+          setIsLoadingProfile(false);
+          setStep(lastStep > 1 ? lastStep : 2);
+        }, 0);
       }
     }).catch(() => {});
   }, [loadProfile]);
@@ -218,11 +230,14 @@ export default function OnboardingPage() {
         if (accounts && accounts.length > 0) {
           const addr = accounts[0];
           setWalletAddress(addr);
+          setIsLoadingProfile(true);
           setLoadingProfile(true);
-          loadProfile(addr);
+          const lastStep = loadProfile(addr);
           setLoadingProfile(false);
-          // Reset to step 1 on account change
-          setStep(1);
+          setTimeout(() => {
+            setIsLoadingProfile(false);
+            setStep(lastStep > 1 ? lastStep : 2);
+          }, 0);
         } else {
           setWalletAddress(null);
           setStep(1);

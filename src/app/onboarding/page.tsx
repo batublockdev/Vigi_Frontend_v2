@@ -1,13 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ArrowLeft, ArrowRight, Check, User, Coins, Shield, PieChart,
-  Wallet, AlertCircle, Plus, Minus, Info, TrendingUp, Gem, Globe
+  Wallet, AlertCircle, Plus, Minus, Info, TrendingUp, Gem, Globe,
+  Loader2,
 } from 'lucide-react';
-import { ALL_TOKENS, INVESTOR_TYPES, CHAIN_COLORS } from '@/lib/tokens';
+import { ALL_TOKENS, INVESTOR_TYPES, CHAIN_COLORS, MAX_TOKENS } from '@/lib/tokens';
+import { MetaMaskLogo } from '@/components/CoinLogos';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Shield, TrendingUp, Gem, Globe,
@@ -27,70 +29,117 @@ interface TokenConfig {
 
 interface UserProfile {
   name: string;
+  walletAddress: string;
   tokens: TokenConfig[];
   depositAmount: string;
   depositToken: string;
   createdAt: string;
+  updatedAt: string;
 }
 
 const STEPS = [
-  { id: 1, label: 'Nombre', icon: User },
-  { id: 2, label: 'Perfil', icon: Shield },
-  { id: 3, label: 'Tokens', icon: Coins },
-  { id: 4, label: 'Risk', icon: AlertCircle },
-  { id: 5, label: 'Distrib.', icon: PieChart },
-  { id: 6, label: 'Resumen', icon: Wallet },
+  { id: 1, label: 'Wallet', icon: Wallet },
+  { id: 2, label: 'Nombre', icon: User },
+  { id: 3, label: 'Perfil', icon: Shield },
+  { id: 4, label: 'Tokens', icon: Coins },
+  { id: 5, label: 'Risk', icon: AlertCircle },
+  { id: 6, label: 'Distrib.', icon: PieChart },
+  { id: 7, label: 'Empezar', icon: Check },
 ];
+
+// ---- MetaMask helpers ----
+function getMetaMaskProvider(): any {
+  if (typeof window === 'undefined') return null;
+  const eth = (window as any).ethereum;
+  if (!eth) return null;
+  if (eth.providers && Array.isArray(eth.providers)) {
+    const mm = eth.providers.find((p: any) => p.isMetaMask);
+    if (mm) return mm;
+  }
+  return eth;
+}
+
+async function switchToBSC(provider: any): Promise<void> {
+  try {
+    await provider.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: '0x38' }],
+    });
+  } catch (switchError: any) {
+    if (switchError.code === 4902) {
+      await provider.request({
+        method: 'wallet_addEthereumChain',
+        params: [{
+          chainId: '0x38',
+          chainName: 'BNB Smart Chain',
+          nativeCurrency: { name: 'BNB', symbol: 'BNB', decimals: 18 },
+          rpcUrls: ['https://bsc-dataseed.binance.org'],
+          blockExplorerUrls: ['https://bscscan.com'],
+        }],
+      });
+    }
+  }
+}
 
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [selectedTokens, setSelectedTokens] = useState<string[]>([]);
   const [tokenConfigs, setTokenConfigs] = useState<Record<string, { stopLossPct: number; takeProfitPct: number; allocationPct: number }>>({});
-  const [saved, setSaved] = useState(false);
   const [infoToken, setInfoToken] = useState<string | null>(null);
   const [investorType, setInvestorType] = useState<string | null>(null);
   const [showAllTokens, setShowAllTokens] = useState(false);
   const [tokenPage, setTokenPage] = useState(0);
   const [riskPage, setRiskPage] = useState(0);
+  const [loadingProfile, setLoadingProfile] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const TOKENS_PER_PAGE = 8;
   const RISK_PER_PAGE = 6;
 
-  useEffect(() => {
-    const stored = localStorage.getItem('vigi_user_profile');
+  // ---- Load profile by wallet address ----
+  const loadProfile = useCallback((addr: string) => {
+    const key = `vigi_profile_${addr.toLowerCase()}`;
+    const stored = localStorage.getItem(key);
     if (stored) {
       try {
         const profile: UserProfile = JSON.parse(stored);
-        setName(profile.name);
+        setName(profile.name || '');
         setSelectedTokens(profile.tokens.map(t => t.symbol));
         const configs: Record<string, any> = {};
         profile.tokens.forEach(t => {
-          configs[t.symbol] = { stopLossPct: t.stopLossPct, takeProfitPct: t.takeProfitPct, allocationPct: t.allocationPct };
+          configs[t.symbol] = {
+            stopLossPct: t.stopLossPct,
+            takeProfitPct: t.takeProfitPct,
+            allocationPct: t.allocationPct,
+          };
         });
         setTokenConfigs(configs);
-      } catch (e) {}
+        setProfileLoaded(true);
+        return true;
+      } catch (e) {
+        return false;
+      }
     }
+    return false;
   }, []);
 
-  const selectedTokenObjs = ALL_TOKENS.filter(t => selectedTokens.includes(t.symbol));
-  const totalAllocation = selectedTokenObjs.reduce((sum, t) => sum + (tokenConfigs[t.symbol]?.allocationPct || 0), 0);
+  // ---- Save profile by wallet address ----
+  const saveProfile = useCallback(() => {
+    if (!walletAddress) return;
+    const selectedTokenObjs = ALL_TOKENS.filter(t => selectedTokens.includes(t.symbol));
+    const key = `vigi_profile_${walletAddress.toLowerCase()}`;
+    const existing = localStorage.getItem(key);
+    const createdAt = existing
+      ? (JSON.parse(existing) as UserProfile).createdAt
+      : new Date().toISOString();
 
-  const canProceed = () => {
-    switch (step) {
-      case 1: return name.trim().length >= 2;
-      case 2: return investorType !== null;
-      case 3: return selectedTokens.length >= 1;
-      case 4: return selectedTokens.every(s => { const c = tokenConfigs[s]; return c && c.stopLossPct > 0 && c.takeProfitPct > 0; });
-      case 5: return Math.abs(totalAllocation - 100) < 0.01;
-      case 6: return true;
-      default: return false;
-    }
-  };
-
-  const handleSave = () => {
     const profile: UserProfile = {
       name: name.trim(),
+      walletAddress,
       tokens: selectedTokenObjs.map(t => ({
         symbol: t.symbol, name: t.name, address: t.address, decimals: t.decimals, color: t.color, chain: t.chain,
         stopLossPct: tokenConfigs[t.symbol]?.stopLossPct || 5,
@@ -98,17 +147,136 @@ export default function OnboardingPage() {
         allocationPct: tokenConfigs[t.symbol]?.allocationPct || 0,
       })),
       depositAmount: '', depositToken: 'USDT',
-      createdAt: new Date().toISOString(),
+      createdAt,
+      updatedAt: new Date().toISOString(),
     };
-    localStorage.setItem('vigi_user_profile', JSON.stringify(profile));
-    setSaved(true);
+    localStorage.setItem(key, JSON.stringify(profile));
+  }, [walletAddress, name, selectedTokens, tokenConfigs]);
+
+  // ---- Auto-save on every change after wallet connected ----
+  useEffect(() => {
+    if (walletAddress && step > 1) {
+      saveProfile();
+    }
+  }, [name, selectedTokens, tokenConfigs, step, walletAddress, saveProfile]);
+
+  // ---- Connect MetaMask ----
+  const connectMetaMask = useCallback(async () => {
+    setIsConnecting(true);
+    setWalletError(null);
+    try {
+      const provider = getMetaMaskProvider();
+      if (!provider) {
+        setWalletError('MetaMask no encontrado. Instala la extension para continuar.');
+        setIsConnecting(false);
+        return;
+      }
+      const accounts = await provider.request({ method: 'eth_requestAccounts' });
+      if (!accounts || accounts.length === 0) throw new Error('No accounts authorized');
+
+      const addr = accounts[0];
+      setWalletAddress(addr);
+      await switchToBSC(provider);
+
+      // Load existing profile
+      setLoadingProfile(true);
+      const found = loadProfile(addr);
+      setLoadingProfile(false);
+
+      if (found) {
+        // Profile exists — skip to step 7 (Empezar) to show resume
+        setStep(7);
+      } else {
+        setStep(2);
+      }
+    } catch (err: any) {
+      if (err.code === 4001) {
+        setWalletError('Conexion cancelada.');
+      } else {
+        setWalletError(err.message || 'Error al conectar MetaMask');
+      }
+    } finally {
+      setIsConnecting(false);
+    }
+  }, [loadProfile]);
+
+  // ---- Check if already connected on mount ----
+  useEffect(() => {
+    const provider = getMetaMaskProvider();
+    if (!provider) return;
+    provider.request({ method: 'eth_accounts' }).then((accounts: string[]) => {
+      if (accounts && accounts.length > 0) {
+        const addr = accounts[0];
+        setWalletAddress(addr);
+        setLoadingProfile(true);
+        const found = loadProfile(addr);
+        setLoadingProfile(false);
+        if (found) {
+          setStep(7);
+        } else {
+          setStep(2);
+        }
+      }
+    }).catch(() => {});
+  }, [loadProfile]);
+
+  // ---- Listen for account changes ----
+  useEffect(() => {
+    const provider = getMetaMaskProvider();
+    if (provider && provider.on) {
+      const handleAccountsChanged = (accounts: string[]) => {
+        if (accounts && accounts.length > 0) {
+          const addr = accounts[0];
+          setWalletAddress(addr);
+          setLoadingProfile(true);
+          const found = loadProfile(addr);
+          setLoadingProfile(false);
+          if (found) {
+            setStep(7);
+          } else {
+            setStep(2);
+            setName('');
+            setSelectedTokens([]);
+            setTokenConfigs({});
+            setInvestorType(null);
+          }
+        } else {
+          setWalletAddress(null);
+          setStep(1);
+        }
+      };
+      provider.on('accountsChanged', handleAccountsChanged);
+      return () => {
+        if (provider.removeListener) {
+          provider.removeListener('accountsChanged', handleAccountsChanged);
+        }
+      };
+    }
+  }, [loadProfile]);
+
+  const selectedTokenObjs = ALL_TOKENS.filter(t => selectedTokens.includes(t.symbol));
+  const totalAllocation = selectedTokenObjs.reduce((sum, t) => sum + (tokenConfigs[t.symbol]?.allocationPct || 0), 0);
+  const maxTokensReached = selectedTokens.length >= MAX_TOKENS;
+
+  const canProceed = () => {
+    switch (step) {
+      case 1: return walletAddress !== null;
+      case 2: return name.trim().length >= 2;
+      case 3: return investorType !== null;
+      case 4: return selectedTokens.length >= 1 && selectedTokens.length <= MAX_TOKENS;
+      case 5: return selectedTokens.every(s => { const c = tokenConfigs[s]; return c && c.stopLossPct > 0 && c.takeProfitPct > 0; });
+      case 6: return Math.abs(totalAllocation - 100) < 0.01;
+      case 7: return true;
+      default: return false;
+    }
   };
 
-  const nextStep = () => step < 6 && setStep(step + 1);
+  const nextStep = () => step < 7 && setStep(step + 1);
   const prevStep = () => step > 1 && setStep(step - 1);
 
+  // Auto-distribute allocation when entering step 6
   useEffect(() => {
-    if (step === 5 && selectedTokens.length > 0) {
+    if (step === 6 && selectedTokens.length > 0) {
       const equal = Math.floor(100 / selectedTokens.length);
       const rem = 100 - equal * selectedTokens.length;
       const nc = { ...tokenConfigs };
@@ -117,7 +285,7 @@ export default function OnboardingPage() {
       });
       setTokenConfigs(nc);
     }
-    if (step === 4) setRiskPage(0);
+    if (step === 5) setRiskPage(0);
   }, [step]); // eslint-disable-line
 
   const handleAllocationChange = (changed: string, newValue: number) => {
@@ -150,6 +318,11 @@ export default function OnboardingPage() {
   const totalPages = Math.ceil(tokensToShow.length / TOKENS_PER_PAGE);
   const paginatedTokens = tokensToShow.slice(tokenPage * TOKENS_PER_PAGE, (tokenPage + 1) * TOKENS_PER_PAGE);
 
+  const handleStart = () => {
+    saveProfile();
+    router.push('/dashboard');
+  };
+
   return (
     <div className="h-screen bg-[#F5F5F4] text-[#0C1424] flex flex-col overflow-hidden">
       {/* Top bar */}
@@ -163,7 +336,15 @@ export default function OnboardingPage() {
             </div>
             <span className="text-xs font-bold tracking-tight text-[#0C1424]" style={{ fontFamily: 'var(--font-inter)' }}>Vigi Protocol</span>
           </Link>
-          <Link href="/" className="text-[10px] font-medium uppercase tracking-wider text-ink-muted hover:text-[#2540EB] transition-colors" style={{ fontFamily: 'var(--font-inter)' }}>Volver</Link>
+          <div className="flex items-center gap-3">
+            {walletAddress && (
+              <span className="flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-2.5 py-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                <span className="text-[10px] font-mono font-bold text-amber-800">{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</span>
+              </span>
+            )}
+            <Link href="/" className="text-[10px] font-medium uppercase tracking-wider text-ink-muted hover:text-[#2540EB] transition-colors" style={{ fontFamily: 'var(--font-inter)' }}>Volver</Link>
+          </div>
         </div>
       </div>
 
@@ -193,11 +374,41 @@ export default function OnboardingPage() {
       <div className="flex-1 overflow-hidden mx-auto max-w-4xl w-full px-6 pb-3">
         <div className="h-full flex flex-col">
 
-          {/* STEP 1: Nombre */}
+          {/* STEP 1: Connect MetaMask */}
           {step === 1 && (
             <div className="flex-1 flex flex-col items-center justify-center">
               <div className="text-center mb-8">
                 <span className="text-[10px] font-medium uppercase tracking-wider text-[#2540EB]" style={{ fontFamily: 'var(--font-inter)' }}>Bienvenido a Vigi</span>
+                <h1 className="font-serif-display text-3xl sm:text-4xl font-medium tracking-tight text-[#0C1424] mt-3 mb-2">Conecta tu wallet</h1>
+                <p className="text-xs text-ink-light max-w-sm mx-auto" style={{ fontFamily: 'var(--font-inter)' }}>Conecta MetaMask en BNB Chain para empezar. Tu progreso se guarda automaticamente por tu direccion.</p>
+              </div>
+              <div className="w-full max-w-sm space-y-3">
+                <button
+                  onClick={connectMetaMask}
+                  disabled={isConnecting}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl border border-orange-200 bg-orange-50/70 hover:bg-orange-100/90 py-3.5 px-4 text-sm font-bold text-orange-950 transition active:scale-[0.98] shadow-xs disabled:opacity-60"
+                >
+                  <MetaMaskLogo className="h-5 w-5 shrink-0" />
+                  <span>{isConnecting ? 'Conectando...' : 'Conectar MetaMask'}</span>
+                </button>
+                {walletError && (
+                  <p className="text-[11px] text-rose-600 font-medium text-center px-1">{walletError}</p>
+                )}
+                {loadingProfile && (
+                  <div className="flex items-center justify-center gap-2 text-[11px] text-ink-muted">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <span>Cargando tu perfil...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* STEP 2: Nombre */}
+          {step === 2 && (
+            <div className="flex-1 flex flex-col items-center justify-center">
+              <div className="text-center mb-8">
+                <span className="text-[10px] font-medium uppercase tracking-wider text-[#2540EB]" style={{ fontFamily: 'var(--font-inter)' }}>Paso 2</span>
                 <h1 className="font-serif-display text-3xl sm:text-4xl font-medium tracking-tight text-[#0C1424] mt-3 mb-2">Empecemos por ti</h1>
                 <p className="text-xs text-ink-light max-w-sm mx-auto" style={{ fontFamily: 'var(--font-inter)' }}>Vigi configura tu portafolio de inversion automatico. Primero, dime tu nombre.</p>
               </div>
@@ -211,8 +422,8 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* STEP 2: Tipo de inversor */}
-          {step === 2 && (
+          {/* STEP 3: Tipo de inversor */}
+          {step === 3 && (
             <div className="flex-1 flex flex-col min-h-0">
               <div className="mb-4">
                 <h2 className="font-serif-display text-2xl font-medium tracking-tight text-[#0C1424] mb-1">Que tipo de inversor eres, {name}?</h2>
@@ -227,9 +438,11 @@ export default function OnboardingPage() {
                       <button key={type.id}
                         onClick={() => {
                           setInvestorType(type.id); setShowAllTokens(false);
+                          // Pre-select up to MAX_TOKENS from the profile's token list
+                          const tokensToSelect = type.tokens.slice(0, MAX_TOKENS);
                           const nc = { ...tokenConfigs };
-                          type.tokens.forEach(sym => { if (!nc[sym]) nc[sym] = { stopLossPct: 5, takeProfitPct: 10, allocationPct: 0 }; });
-                          setSelectedTokens(type.tokens); setTokenConfigs(nc);
+                          tokensToSelect.forEach(sym => { if (!nc[sym]) nc[sym] = { stopLossPct: 5, takeProfitPct: 10, allocationPct: 0 }; });
+                          setSelectedTokens(tokensToSelect); setTokenConfigs(nc);
                         }}
                         className={`flex items-start gap-3 rounded-xl border-2 p-4 text-left transition-all duration-200 ${isSelected ? 'border-[#2540EB] bg-[#2540EB]/5' : 'border-stone-200 bg-white hover:border-stone-300'}`}>
                         <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${isSelected ? 'bg-[#2540EB] text-white' : 'bg-stone-100 text-stone-400'}`}><Icon className="h-4 w-4" /></div>
@@ -250,25 +463,33 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* STEP 3: Tokens */}
-          {step === 3 && (
+          {/* STEP 4: Tokens (max 6) */}
+          {step === 4 && (
             <div className="flex-1 flex flex-col min-h-0">
               <div className="mb-4">
                 <h2 className="font-serif-display text-2xl font-medium tracking-tight text-[#0C1424] mb-1">Tus tokens</h2>
-                <p className="text-xs text-ink-light" style={{ fontFamily: 'var(--font-inter)' }}>Lista basada en tu perfil. Puedes añadir mas si quieres.</p>
+                <p className="text-xs text-ink-light" style={{ fontFamily: 'var(--font-inter)' }}>
+                 Selecciona maximo {MAX_TOKENS} tokens. <span className={`font-bold ${maxTokensReached ? 'text-red-500' : 'text-[#2540EB]'}`}>{selectedTokens.length}/{MAX_TOKENS}</span> seleccionados.
+                </p>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 pb-2">
                   {paginatedTokens.map((token) => {
                     const isSelected = selectedTokens.includes(token.symbol);
+                    const isDisabled = !isSelected && maxTokensReached;
                     return (
                       <div key={token.symbol} className="relative">
                         <button
+                          disabled={isDisabled}
                           onClick={() => {
-                            if (isSelected) setSelectedTokens(selectedTokens.filter(s => s !== token.symbol));
-                            else { setSelectedTokens([...selectedTokens, token.symbol]); if (!tokenConfigs[token.symbol]) setTokenConfigs({ ...tokenConfigs, [token.symbol]: { stopLossPct: 5, takeProfitPct: 10, allocationPct: 0 } }); }
+                            if (isSelected) {
+                              setSelectedTokens(selectedTokens.filter(s => s !== token.symbol));
+                            } else if (!maxTokensReached) {
+                              setSelectedTokens([...selectedTokens, token.symbol]);
+                              if (!tokenConfigs[token.symbol]) setTokenConfigs({ ...tokenConfigs, [token.symbol]: { stopLossPct: 5, takeProfitPct: 10, allocationPct: 0 } });
+                            }
                           }}
-                          className={`w-full flex flex-col items-start gap-2 rounded-xl border-2 p-3 text-left transition-all duration-200 ${isSelected ? 'border-[#2540EB] bg-[#2540EB]/5' : 'border-stone-200 bg-white hover:border-stone-300'}`}>
+                          className={`w-full flex flex-col items-start gap-2 rounded-xl border-2 p-3 text-left transition-all duration-200 ${isSelected ? 'border-[#2540EB] bg-[#2540EB]/5' : isDisabled ? 'border-stone-200 bg-stone-50 opacity-40 cursor-not-allowed' : 'border-stone-200 bg-white hover:border-stone-300'}`}>
                           <div className="flex items-center gap-2 w-full">
                             <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: token.color }}>{token.symbol.slice(0, 2)}</div>
                             <div className="min-w-0 flex-1">
@@ -277,7 +498,6 @@ export default function OnboardingPage() {
                             </div>
                             {isSelected && <div className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#2540EB]"><Check className="h-2.5 w-2.5 text-white" /></div>}
                           </div>
-                          {/* Chain badge */}
                           <div className="flex items-center gap-1">
                             <span className="text-[8px] font-medium uppercase tracking-wider rounded px-1.5 py-0.5 text-white" style={{ backgroundColor: CHAIN_COLORS[token.chain] || '#999' }}>{token.chain}</span>
                             <span className="text-[8px] text-ink-muted uppercase">{token.category}</span>
@@ -304,7 +524,7 @@ export default function OnboardingPage() {
                   <div className="flex items-center gap-2">
                     {!showAllTokens ? (
                       <button onClick={() => { setShowAllTokens(true); setTokenPage(0); }} className="flex items-center gap-1.5 rounded-xl border border-dashed border-stone-300 px-3 py-2 text-[10px] font-medium uppercase tracking-wider text-ink-muted hover:border-[#2540EB] hover:text-[#2540EB] transition-colors" style={{ fontFamily: 'var(--font-inter)' }}>
-                        <Plus className="h-3.5 w-3.5" /><span>Añadir mas</span>
+                        <Plus className="h-3.5 w-3.5" /><span>Ver todos</span>
                       </button>
                     ) : (
                       <button onClick={() => { setShowAllTokens(false); setTokenPage(0); }} className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wider text-ink-muted hover:text-[#0C1424] transition-colors" style={{ fontFamily: 'var(--font-inter)' }}>
@@ -314,35 +534,28 @@ export default function OnboardingPage() {
                   </div>
                   {totalPages > 1 && (
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setTokenPage(Math.max(0, tokenPage - 1))}
-                        disabled={tokenPage === 0}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
+                      <button onClick={() => setTokenPage(Math.max(0, tokenPage - 1))} disabled={tokenPage === 0} className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed">
                         <ArrowLeft className="h-3.5 w-3.5" />
                       </button>
-                      <span className="text-[10px] font-medium text-ink-muted tabular-nums" style={{ fontFamily: 'var(--font-inter)' }}>
-                        {tokenPage + 1} / {totalPages}
-                      </span>
-                      <button
-                        onClick={() => setTokenPage(Math.min(totalPages - 1, tokenPage + 1))}
-                        disabled={tokenPage === totalPages - 1}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
+                      <span className="text-[10px] font-medium text-ink-muted tabular-nums" style={{ fontFamily: 'var(--font-inter)' }}>{tokenPage + 1} / {totalPages}</span>
+                      <button onClick={() => setTokenPage(Math.min(totalPages - 1, tokenPage + 1))} disabled={tokenPage === totalPages - 1} className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed">
                         <ArrowRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   )}
                 </div>
               </div>
-              <div className="shrink-0 flex items-center gap-2 pt-3 border-t border-stone-200/60 text-[10px] text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>
-                <span className="h-1.5 w-1.5 rounded-full bg-[#2540EB]" /><span>{selectedTokens.length} seleccionado{selectedTokens.length !== 1 ? 's' : ''}</span>
-              </div>
+              {maxTokensReached && (
+                <div className="shrink-0 flex items-center gap-2 pt-2 border-t border-amber-200/60 text-[10px] text-amber-700" style={{ fontFamily: 'var(--font-inter)' }}>
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  <span>Maximo {MAX_TOKENS} tokens alcanzado. Quita uno para agregar otro.</span>
+                </div>
+              )}
             </div>
           )}
 
-          {/* STEP 4: Risk — tabla con paginacion */}
-          {step === 4 && (() => {
+          {/* STEP 5: Risk */}
+          {step === 5 && (() => {
             const riskTotalPages = Math.ceil(selectedTokenObjs.length / RISK_PER_PAGE);
             const riskPaginated = selectedTokenObjs.slice(riskPage * RISK_PER_PAGE, (riskPage + 1) * RISK_PER_PAGE);
             return (
@@ -352,13 +565,11 @@ export default function OnboardingPage() {
                 <p className="text-xs text-ink-light" style={{ fontFamily: 'var(--font-inter)' }}>Stop Loss = max % a perder. Take Profit = % de ganancia para vender.</p>
               </div>
               <div className="flex-1 min-h-0 flex flex-col">
-                {/* Header */}
                 <div className="shrink-0 grid grid-cols-[1fr_90px_90px] gap-2 px-3 pb-2 border-b border-stone-200">
                   <span className="text-[9px] font-medium uppercase tracking-wider text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>Token</span>
                   <span className="text-[9px] font-medium uppercase tracking-wider text-red-500 text-center" style={{ fontFamily: 'var(--font-inter)' }}>Stop Loss</span>
                   <span className="text-[9px] font-medium uppercase tracking-wider text-green-600 text-center" style={{ fontFamily: 'var(--font-inter)' }}>Take Profit</span>
                 </div>
-                {/* Rows */}
                 <div className="flex-1 overflow-hidden">
                   <div className="h-full">
                     {riskPaginated.map((token) => {
@@ -393,7 +604,6 @@ export default function OnboardingPage() {
                     })}
                   </div>
                 </div>
-                {/* Pagination controls */}
                 {riskTotalPages > 1 && (
                   <div className="shrink-0 flex items-center justify-between pt-3 border-t border-stone-200/60">
                     <div className="flex items-center gap-2 text-[10px] text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>
@@ -401,21 +611,11 @@ export default function OnboardingPage() {
                       <span>{selectedTokens.length} tokens · config {riskPage + 1}-{Math.min((riskPage + 1) * RISK_PER_PAGE, selectedTokenObjs.length)} de {selectedTokenObjs.length}</span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setRiskPage(Math.max(0, riskPage - 1))}
-                        disabled={riskPage === 0}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
+                      <button onClick={() => setRiskPage(Math.max(0, riskPage - 1))} disabled={riskPage === 0} className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed">
                         <ArrowLeft className="h-3.5 w-3.5" />
                       </button>
-                      <span className="text-[10px] font-medium text-ink-muted tabular-nums" style={{ fontFamily: 'var(--font-inter)' }}>
-                        {riskPage + 1} / {riskTotalPages}
-                      </span>
-                      <button
-                        onClick={() => setRiskPage(Math.min(riskTotalPages - 1, riskPage + 1))}
-                        disabled={riskPage === riskTotalPages - 1}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed"
-                      >
+                      <span className="text-[10px] font-medium text-ink-muted tabular-nums" style={{ fontFamily: 'var(--font-inter)' }}>{riskPage + 1} / {riskTotalPages}</span>
+                      <button onClick={() => setRiskPage(Math.min(riskTotalPages - 1, riskPage + 1))} disabled={riskPage === riskTotalPages - 1} className="flex h-7 w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-stone-500 hover:border-[#2540EB] hover:text-[#2540EB] transition disabled:opacity-30 disabled:cursor-not-allowed">
                         <ArrowRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
@@ -426,15 +626,13 @@ export default function OnboardingPage() {
             );
           })()}
 
-
-          {/* STEP 5: Distribucion — lista compacta sin scroll */}
-          {step === 5 && (
+          {/* STEP 6: Distribucion */}
+          {step === 6 && (
             <div className="flex-1 flex flex-col min-h-0">
               <div className="mb-3">
                 <h2 className="font-serif-display text-2xl font-medium tracking-tight text-[#0C1424] mb-1">Distribuye tu capital</h2>
                 <p className="text-xs text-ink-light" style={{ fontFamily: 'var(--font-inter)' }}>Mueve los sliders. El total siempre suma 100%.</p>
               </div>
-              {/* Barra visual + total */}
               <div className="shrink-0 rounded-xl border border-stone-200 bg-white px-4 py-2.5 mb-2">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] font-medium uppercase tracking-wider text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>Total</span>
@@ -447,7 +645,6 @@ export default function OnboardingPage() {
                   {selectedTokenObjs.map((token) => { const pct = tokenConfigs[token.symbol]?.allocationPct || 0; if (pct === 0) return null; return <div key={token.symbol} style={{ width: `${pct}%`, backgroundColor: token.color }} className="transition-all duration-200" />; })}
                 </div>
               </div>
-              {/* Lista compacta de sliders */}
               <div className="flex-1 min-h-0 overflow-hidden">
                 <div className="h-full overflow-y-auto">
                   {selectedTokenObjs.map((token) => {
@@ -467,64 +664,89 @@ export default function OnboardingPage() {
             </div>
           )}
 
-          {/* STEP 6: Resumen */}
-          {step === 6 && (
+          {/* STEP 7: Resumen + Empezar */}
+          {step === 7 && (
             <div className="flex-1 flex flex-col min-h-0">
               <div className="text-center mb-4">
-                <span className="text-[10px] font-medium uppercase tracking-wider text-green-600" style={{ fontFamily: 'var(--font-inter)' }}>Todo listo</span>
-                <h2 className="font-serif-display text-2xl font-medium tracking-tight text-[#0C1424] mt-2 mb-1">Tu portafolio, {name}</h2>
-                <p className="text-xs text-ink-light" style={{ fontFamily: 'var(--font-inter)' }}>Revisa antes de guardar. Podras editar mas adelante.</p>
+                <span className="text-[10px] font-medium uppercase tracking-wider text-green-600" style={{ fontFamily: 'var(--font-inter)' }}>
+                  {profileLoaded ? 'Bienvenido de vuelta' : 'Todo listo'}
+                </span>
+                <h2 className="font-serif-display text-2xl font-medium tracking-tight text-[#0C1424] mt-2 mb-1">Tu portafolio, {name || 'inversor'}</h2>
+                <p className="text-xs text-ink-light" style={{ fontFamily: 'var(--font-inter)' }}>
+                  {profileLoaded ? 'Tu perfil esta guardado. Puedes editar o empezar cuando quieras.' : 'Revisa tu configuracion. Todo se guarda automaticamente.'}
+                </p>
               </div>
               <div className="flex-1 overflow-y-auto min-h-0">
-                <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
-                  <div className="bg-[#0C1424] px-5 py-3.5 flex items-center justify-between">
-                    <div><div className="text-[9px] font-medium uppercase tracking-wider text-stone-400" style={{ fontFamily: 'var(--font-inter)' }}>Perfil</div><div className="text-sm font-bold text-white" style={{ fontFamily: 'var(--font-inter)' }}>{name}</div></div>
-                    <div className="text-right"><div className="text-[9px] font-medium uppercase tracking-wider text-stone-400" style={{ fontFamily: 'var(--font-inter)' }}>Tokens</div><div className="text-sm font-bold text-white" style={{ fontFamily: 'var(--font-inter)' }}>{selectedTokens.length}</div></div>
-                  </div>
-                  <div className="divide-y divide-stone-100">
-                    {selectedTokenObjs.map((token) => {
-                      const config = tokenConfigs[token.symbol];
-                      return (
-                        <div key={token.symbol} className="flex items-center justify-between px-5 py-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="flex h-7 w-7 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: token.color }}>{token.symbol.slice(0, 2)}</div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs font-semibold text-[#0C1424]" style={{ fontFamily: 'var(--font-inter)' }}>{token.symbol}</span>
-                                <span className="text-[8px] font-medium uppercase tracking-wider rounded px-1 py-0.5 text-white" style={{ backgroundColor: CHAIN_COLORS[token.chain] || '#999' }}>{token.chain}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-[9px] text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>
-                                <span className="text-red-500">SL {config?.stopLossPct}%</span><span className="text-green-600">TP {config?.takeProfitPct}%</span>
+                {selectedTokenObjs.length > 0 ? (
+                  <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
+                    <div className="bg-[#0C1424] px-5 py-3.5 flex items-center justify-between">
+                      <div>
+                        <div className="text-[9px] font-medium uppercase tracking-wider text-stone-400" style={{ fontFamily: 'var(--font-inter)' }}>Perfil</div>
+                        <div className="text-sm font-bold text-white" style={{ fontFamily: 'var(--font-inter)' }}>{name}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] font-medium uppercase tracking-wider text-stone-400" style={{ fontFamily: 'var(--font-inter)' }}>Tokens</div>
+                        <div className="text-sm font-bold text-white" style={{ fontFamily: 'var(--font-inter)' }}>{selectedTokens.length}/{MAX_TOKENS}</div>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-stone-100">
+                      {selectedTokenObjs.map((token) => {
+                        const config = tokenConfigs[token.symbol];
+                        return (
+                          <div key={token.symbol} className="flex items-center justify-between px-5 py-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ backgroundColor: token.color }}>{token.symbol.slice(0, 2)}</div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-semibold text-[#0C1424]" style={{ fontFamily: 'var(--font-inter)' }}>{token.symbol}</span>
+                                  <span className="text-[8px] font-medium uppercase tracking-wider rounded px-1 py-0.5 text-white" style={{ backgroundColor: CHAIN_COLORS[token.chain] || '#999' }}>{token.chain}</span>
+                                </div>
+                                <div className="flex items-center gap-2 text-[9px] text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>
+                                  <span className="text-red-500">SL {config?.stopLossPct}%</span><span className="text-green-600">TP {config?.takeProfitPct}%</span>
+                                </div>
                               </div>
                             </div>
+                            <div className="text-xs font-bold text-[#0C1424]" style={{ fontFamily: 'var(--font-inter)' }}>{config?.allocationPct || 0}%</div>
                           </div>
-                          <div className="text-xs font-bold text-[#0C1424]" style={{ fontFamily: 'var(--font-inter)' }}>{config?.allocationPct}%</div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                    <div className="bg-stone-50 px-5 py-3 flex items-center justify-between text-[10px]" style={{ fontFamily: 'var(--font-inter)' }}>
+                      <span className="text-ink-muted">Total</span><span className="font-bold text-green-600">{totalAllocation}%</span>
+                    </div>
                   </div>
-                  <div className="bg-stone-50 px-5 py-3 flex items-center justify-between text-[10px]" style={{ fontFamily: 'var(--font-inter)' }}>
-                    <span className="text-ink-muted">Total</span><span className="font-bold text-green-600">{totalAllocation}%</span>
+                ) : (
+                  <div className="rounded-2xl border border-stone-200 bg-white p-8 text-center">
+                    <p className="text-xs text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>No has seleccionado tokens todavia. Vuelve atras para configurar tu portafolio.</p>
                   </div>
-                </div>
+                )}
                 <div className="mt-3 rounded-xl border border-[#2540EB]/20 bg-[#2540EB]/5 px-4 py-3">
                   <div className="flex items-start gap-2.5">
                     <Wallet className="h-4 w-4 text-[#2540EB] shrink-0 mt-0.5" />
-                    <div><div className="text-xs font-semibold text-[#0C1424] mb-0.5" style={{ fontFamily: 'var(--font-inter)' }}>Proximo paso: Conectar wallet</div><p className="text-[10px] text-ink-light" style={{ fontFamily: 'var(--font-inter)' }}>Despues de guardar, podras conectar MetaMask para depositar y activar la gestion automatica.</p></div>
+                    <div>
+                      <div className="text-xs font-semibold text-[#0C1424] mb-0.5" style={{ fontFamily: 'var(--font-inter)' }}>Wallet conectada</div>
+                      <p className="text-[10px] text-ink-light font-mono" style={{ fontFamily: 'var(--font-inter)' }}>{walletAddress?.slice(0, 10)}...{walletAddress?.slice(-8)}</p>
+                      <p className="text-[10px] text-ink-light mt-1" style={{ fontFamily: 'var(--font-inter)' }}>Tu progreso se guarda automaticamente. Si vuelves a entrar con esta wallet, retomas donde lo dejaste.</p>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="shrink-0 pt-3">
-                {!saved ? (
-                  <button onClick={handleSave} className="w-full rounded-xl bg-[#0C1424] hover:bg-[#1A2235] active:scale-[0.98] transition-all text-white text-xs font-semibold py-3.5" style={{ fontFamily: 'var(--font-inter)' }}>Guardar mi perfil</button>
-                ) : (
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-center gap-2 rounded-xl bg-green-50 border border-green-200 px-4 py-3"><Check className="h-4 w-4 text-green-600" /><span className="text-xs font-semibold text-green-700" style={{ fontFamily: 'var(--font-inter)' }}>Perfil guardado localmente</span></div>
-                    <div className="flex gap-2.5">
-                      <button onClick={() => router.push('/dashboard')} className="flex-1 rounded-xl bg-[#0C1424] hover:bg-[#1A2235] active:scale-[0.98] transition-all text-white text-xs font-semibold py-3" style={{ fontFamily: 'var(--font-inter)' }}>Ver Dashboard</button>
-                      <button onClick={() => router.push('/')} className="flex-1 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 active:scale-[0.98] transition-all text-[#0C1424] text-xs font-semibold py-3" style={{ fontFamily: 'var(--font-inter)' }}>Inicio</button>
-                    </div>
-                  </div>
+              <div className="shrink-0 pt-3 space-y-2.5">
+                <button
+                  onClick={handleStart}
+                  className="w-full rounded-xl bg-[#2540EB] hover:bg-[#1A33D0] active:scale-[0.98] transition-all text-white text-sm font-bold py-3.5"
+                  style={{ fontFamily: 'var(--font-inter)' }}
+                >
+                  Empezar
+                </button>
+                {selectedTokenObjs.length > 0 && (
+                  <button
+                    onClick={() => setStep(4)}
+                    className="w-full rounded-xl border border-stone-200 bg-white hover:bg-stone-50 active:scale-[0.98] transition-all text-[#0C1424] text-xs font-semibold py-2.5"
+                    style={{ fontFamily: 'var(--font-inter)' }}
+                  >
+                    Editar tokens
+                  </button>
                 )}
               </div>
             </div>
@@ -534,13 +756,13 @@ export default function OnboardingPage() {
       </div>
 
       {/* Navigation */}
-      {!(step === 6 && saved) && (
+      {step > 1 && step < 7 && (
         <div className="shrink-0 border-t border-stone-200/60 bg-[#F5F5F4]">
           <div className="mx-auto max-w-4xl flex items-center justify-between px-6 py-3">
             <button onClick={prevStep} disabled={step === 1} className="flex items-center gap-1.5 text-[10px] font-medium text-ink-muted hover:text-[#0C1424] transition-colors disabled:opacity-30 disabled:cursor-not-allowed" style={{ fontFamily: 'var(--font-inter)' }}>
               <ArrowLeft className="h-3.5 w-3.5" /><span>Anterior</span>
             </button>
-            {step < 6 && (
+            {step < 7 && (
               <button onClick={nextStep} disabled={!canProceed()} className="flex items-center gap-1.5 rounded-xl bg-[#0C1424] hover:bg-[#1A2235] active:scale-[0.98] transition-all text-white text-[10px] font-semibold px-5 py-2.5 disabled:opacity-30 disabled:cursor-not-allowed" style={{ fontFamily: 'var(--font-inter)' }}>
                 <span>Siguiente</span><ArrowRight className="h-3.5 w-3.5" />
               </button>

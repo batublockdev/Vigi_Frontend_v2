@@ -20,6 +20,8 @@ export const CHAIN_COLORS: Record<string, string> = {
   BNB: '#F0B90B',
 };
 
+export const MAX_TOKENS = 6;
+
 // ============================================================
 //   TOKENS PEGGED DE BINANCE
 // ============================================================
@@ -95,10 +97,11 @@ export const ALL_TOKENS: TokenInfo[] = [
   { symbol: 'COINon', name: 'Coinbase (Ondo)', address: '0xf8589b526FdD65F7F301c605a6e04F0F1b4B3620', decimals: 18, color: '#0052FF', category: 'stock', chain: 'BNB', chainId: 56, desc: 'Coinbase Global tokenizado via Ondo Finance.' },
   { symbol: 'MSTRon', name: 'MicroStrategy (Ondo)', address: '0x7313EA16493b2f55054Df0131A3A14B043ec8992', decimals: 18, color: '#000000', category: 'stock', chain: 'BNB', chainId: 56, desc: 'MicroStrategy tokenizado via Ondo Finance.' },
   { symbol: 'PLTRon', name: 'Palantir (Ondo)', address: '0x9351AbD19f42101dD36025E495B98E910b255d78', decimals: 18, color: '#003A70', category: 'stock', chain: 'BNB', chainId: 56, desc: 'Palantir Technologies tokenizado via Ondo.' },
-  { symbol: 'HOODon', name: 'Robinhood (Ondo)', address: '0x19601179A60f55Ff6636F5D1A8b6671053Bd60a8', decimals: 18, color: '#00C805', category: 'stock', chain: 'BNB', chainId: 56, desc: 'Robinhood Markets tokenizado via Ondo.' },
+  { symbol: 'HOODon', name: 'Robinhood (Ondo)', address: '0x19601179A60f55Ff6636F5D1A8b6671053Bd60a8', decimals: 18, color: '#00C805', category: 'stock', chain: 'BNB', chainId: 56, desc: 'Robinhood Markets tokenizado via Ondo Finance.' },
   { symbol: 'GMEon', name: 'GameStop (Ondo)', address: '0xdABb9afF4cf02f26D2014e4cA9f94aC6fe6572a3', decimals: 18, color: '#CC0000', category: 'stock', chain: 'BNB', chainId: 56, desc: 'GameStop Corp tokenizado via Ondo Finance.' },
   { symbol: 'RDDTon', name: 'Reddit (Ondo)', address: '0x4DA12f47578ef89c76179b760C778E70b668f80b', decimals: 18, color: '#FF4500', category: 'stock', chain: 'BNB', chainId: 56, desc: 'Reddit Inc. tokenizado via Ondo Finance.' },
   { symbol: 'SPCXon', name: 'SpaceX (Ondo)', address: '0xd0a58BC9D88D3FF48C0294Cb7e45937d0E41A928', decimals: 18, color: '#0033FF', category: 'stock', chain: 'BNB', chainId: 56, desc: 'SpaceX tokenizado via Ondo Finance.' },
+  { symbol: 'FXLon', name: 'iShares China Large-Cap ETF (Ondo)', address: '0x9b8E987e6fEc8Cf1380C4dcA7071e2C7853AEEA1', decimals: 18, color: '#DE2910', category: 'stock', chain: 'BNB', chainId: 56, desc: 'iShares China Large-Cap ETF tokenizado via Ondo Finance.' },
 ];
 
 // ============================================================
@@ -124,13 +127,13 @@ export const INVESTOR_TYPES = [
     label: 'Agresivo',
     desc: 'Maximiza retornos. Crypto, DeFi, memes y stocks de alto crecimiento.',
     icon: 'Gem',
-    tokens: ['BTCB', 'ETH', 'SOL', 'AVAX', 'SUSHI', 'PEPE', 'FLOKI', 'TSLAon', 'NVDAon', 'COINon', 'MSTRon', 'RDDTon', 'SPCXon'],
+    tokens: ['BTCB', 'ETH', 'SOL', 'SUSHI', 'PEPE', 'FLOKI', 'TSLAon', 'NVDAon', 'COINon', 'MSTRon', 'RDDTon', 'SPCXon'],
   },
   {
     id: 'global',
     label: 'Global RWA',
     desc: 'Exposicion a assets del mundo real: stocks, ETFs, commodities y portfolios Ondo.',
     icon: 'Globe',
-    tokens: ['USDY', 'SPYon', 'QQQon', 'IBITon', 'AAPLon', 'TSLAon', 'NVDAon', 'GOOGLon', 'AMZNon', 'METAon', 'NFLXon', 'MAG7Xon', 'BIG5on', 'BLKGRWon'],
+    tokens: ['USDY', 'SPYon', 'QQQon', 'IBITon', 'AAPLon', 'TSLAon', 'NVDAon', 'GOOGLon', 'AMZNon', 'METAon', 'NFLXon', 'MAG7Xon', 'BIG5on', 'BLKGRWon', 'FXLon'],
   },
 ];

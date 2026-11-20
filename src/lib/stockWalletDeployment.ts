@@ -46,7 +46,7 @@ const WBNB =
 
 // Agente configurado en ConstantsBnb.sol
 const ADGENT =
-  ZERO_ADDRESS;
+  '0xf43ea1700E117e9c456690514Db9C5b1405EC5E5' as Address;
 
 const ADGENT_CONTRACT = ZERO_ADDRESS;
 

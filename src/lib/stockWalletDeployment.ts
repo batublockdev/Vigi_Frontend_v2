@@ -241,14 +241,6 @@ export async function deployStockWallet(
   }))
 );
 
-console.log('Deployment TX:', stockWalletHash);
-
-const stockWalletReceipt =
-  await publicClient.waitForTransactionReceipt({
-    hash: stockWalletHash,
-  });
-
-console.log('Deployment receipt:', stockWalletReceipt);
 
 console.log('==================================');
 
@@ -263,6 +255,12 @@ console.log('==================================');
   ) {
     throw new Error('El deployment del StockWallet falló.');
   }
+
+  console.log('Deployment TX:', stockWalletHash);
+
+
+console.log('Deployment receipt:', stockWalletReceipt);
+
 
   const stockWalletAddress =
     stockWalletReceipt.contractAddress;

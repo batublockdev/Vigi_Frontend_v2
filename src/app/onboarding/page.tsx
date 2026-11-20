@@ -313,7 +313,7 @@ const handleStart = async () => {
   try {
     setIsDeploying(true);
 
-    const provider = window.ethereum;
+    const provider = (window as any).ethereum;
 
     if (!provider) {
       throw new Error('MetaMask no está instalada.');

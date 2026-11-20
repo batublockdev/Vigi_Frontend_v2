@@ -231,6 +231,26 @@ export async function deployStockWallet(
       tokenAllocation,
     ],
   });
+  console.log(
+  'Token allocation:',
+  tokenAllocation.map((item) => ({
+    token: item.token,
+    allocationBps: item.configs.allocationBps.toString(),
+    stopLossBps: item.configs.stopLossBps,
+    takeProfitBps: item.configs.takeProfitBps,
+  }))
+);
+
+console.log('Deployment TX:', stockWalletHash);
+
+const stockWalletReceipt =
+  await publicClient.waitForTransactionReceipt({
+    hash: stockWalletHash,
+  });
+
+console.log('Deployment receipt:', stockWalletReceipt);
+
+console.log('==================================');
 
   const stockWalletReceipt =
     await publicClient.waitForTransactionReceipt({

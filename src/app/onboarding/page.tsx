@@ -343,11 +343,6 @@ const handleStart = async () => {
       result.stockWalletAddress
     );
 
-    localStorage.setItem(
-      'scannerAddress',
-      result.scannerAddress
-    );
-
     saveProfile();
 
     // Register onboarding in PostgreSQL so the bot picks up this wallet
@@ -363,7 +358,7 @@ const handleStart = async () => {
           contract: {
             address: result.stockWalletAddress,
             chainId: 56,
-            scannerAddress: result.scannerAddress,
+            scannerAddress: undefined,
           },
           tokens: selectedTokenObjs.map((token) => ({
             symbol: token.symbol,

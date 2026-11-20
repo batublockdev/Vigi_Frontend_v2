@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { ALL_TOKENS, INVESTOR_TYPES, CHAIN_COLORS, MAX_TOKENS } from '@/lib/tokens';
 import { MetaMaskLogo } from '@/components/CoinLogos';
+import { deployStockWallet } from '@/lib/stockWalletDeployment';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Shield, TrendingUp, Gem, Globe,
@@ -48,6 +49,8 @@ const STEPS = [
   { id: 7, label: 'Empezar', icon: Check },
 ];
 
+
+
 // ---- MetaMask helpers ----
 function getMetaMaskProvider(): any {
   if (typeof window === 'undefined') return null;
@@ -85,6 +88,9 @@ async function switchToBSC(provider: any): Promise<void> {
 export default function OnboardingPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
+  const [isDeploying, setIsDeploying] = useState(false);
+const [deploymentError, setDeploymentError] = useState<string | null>(null);
+const [deploymentTx, setDeploymentTx] = useState<string | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [walletError, setWalletError] = useState<string | null>(null);
@@ -302,10 +308,86 @@ export default function OnboardingPage() {
   const totalPages = Math.ceil(tokensToShow.length / TOKENS_PER_PAGE);
   const paginatedTokens = tokensToShow.slice(tokenPage * TOKENS_PER_PAGE, (tokenPage + 1) * TOKENS_PER_PAGE);
 
-  const handleStart = () => {
+
+const handleStart = async () => {
+  try {
+    setIsDeploying(true);
+
+    const provider = window.ethereum;
+
+    if (!provider) {
+      throw new Error('MetaMask no está instalada.');
+    }
+
+    const accounts = await provider.request({
+      method: 'eth_requestAccounts',
+    });
+
+    const result = await deployStockWallet(
+      provider,
+      accounts[0] as Address,
+      selectedTokenObjs.map((token) => ({
+        symbol: token.symbol,
+        address: token.address,
+        chainId: token.chainId,
+        allocationPct: tokenConfigs[token.symbol].allocationPct,
+        stopLossPct: tokenConfigs[token.symbol].stopLossPct,
+        takeProfitPct: tokenConfigs[token.symbol].takeProfitPct,
+      }))
+    );
+
+    // Guardar direcciones para el dashboard.
+    localStorage.setItem(
+      'stockWalletAddress',
+      result.stockWalletAddress
+    );
+
+    localStorage.setItem(
+      'scannerAddress',
+      result.scannerAddress
+    );
+
     saveProfile();
+
+    // Register onboarding in PostgreSQL so the bot picks up this wallet
+    try {
+      await fetch('/api/onboarding/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user: {
+            name: name.trim(),
+            walletAddress: accounts[0],
+          },
+          contract: {
+            address: result.stockWalletAddress,
+            chainId: 56,
+            scannerAddress: result.scannerAddress,
+          },
+          tokens: selectedTokenObjs.map((token) => ({
+            symbol: token.symbol,
+            address: token.address,
+            allocationPct: tokenConfigs[token.symbol].allocationPct,
+            stopLossPct: tokenConfigs[token.symbol].stopLossPct,
+            takeProfitPct: tokenConfigs[token.symbol].takeProfitPct,
+          })),
+        }),
+      });
+    } catch (registerErr: any) {
+      console.error('Failed to register in PostgreSQL:', registerErr.message);
+      // Don't block the flow — the wallet is deployed, just not registered
+    }
+
     router.push('/dashboard');
-  };
+
+  } catch (error: any) {
+    console.error('Deployment error:', error);
+    alert(error.shortMessage || error.message || 'Error en el deployment.');
+  } finally {
+    setIsDeploying(false);
+  }
+};
+
 
   return (
     <div className="h-screen bg-[#F5F5F4] text-[#0C1424] flex flex-col overflow-hidden">
@@ -836,10 +918,29 @@ export default function OnboardingPage() {
                 <span>Siguiente</span><ArrowRight className="h-3.5 w-3.5" />
               </button>
             ) : (
-              <button onClick={handleStart} className="flex items-center gap-1.5 rounded-xl bg-[#2540EB] hover:bg-[#1A33D0] active:scale-[0.98] transition-all text-white text-[10px] font-semibold px-5 py-2.5" style={{ fontFamily: 'var(--font-inter)' }}>
-                <span>Empezar</span><Check className="h-3.5 w-3.5" />
-              </button>
+<button
+  onClick={handleStart}
+  disabled={isDeploying}
+  className="flex items-center gap-1.5 rounded-xl bg-[#2540EB] text-white text-[10px] font-semibold px-5 py-2.5 disabled:opacity-50"
+>
+  {isDeploying ? (
+    <>
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      Desplegando contrato...
+    </>
+  ) : (
+    <>
+      <span>Crear mi StockWallet</span>
+      <Check className="h-3.5 w-3.5" />
+    </>
+  )}
+</button>
             )}
+            {deploymentError && (
+  <p className="text-xs text-red-600 px-6 py-2">
+    {deploymentError}
+  </p>
+)}
           </div>
         </div>
       )}

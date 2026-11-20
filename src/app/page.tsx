@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { deployStockWallet } from '@/lib/stockWalletDeployment';
 import { LandingNav } from '@/components/landing/LandingNav';
 import { Hero } from '@/components/landing/Hero';
 import { ProblemSection } from '@/components/landing/ProblemSection';

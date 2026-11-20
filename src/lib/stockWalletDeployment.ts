@@ -270,21 +270,18 @@ export async function deployStockWallet(
   }
 
   // ================================================
-  // 4. RESULTADO
+  // 3. RESULTADO
   // ================================================
 
   return {
     stockWalletAddress,
-    scannerAddress,
 
     transactions: {
-      scanner: scannerHash,
       stockWallet: stockWalletHash,
       setGasToken: gasTokenHash,
     },
 
     blockNumbers: {
-      scanner: scannerReceipt.blockNumber,
       stockWallet: stockWalletReceipt.blockNumber,
       setGasToken: gasTokenReceipt.blockNumber,
     },

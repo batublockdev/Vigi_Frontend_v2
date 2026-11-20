@@ -11,6 +11,7 @@ import {
 import { ALL_TOKENS, INVESTOR_TYPES, CHAIN_COLORS, MAX_TOKENS } from '@/lib/tokens';
 import { MetaMaskLogo } from '@/components/CoinLogos';
 import { deployStockWallet } from '@/lib/stockWalletDeployment';
+import type { Address } from 'viem';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   Shield, TrendingUp, Gem, Globe,

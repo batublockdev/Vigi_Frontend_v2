@@ -242,6 +242,11 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
             const info = getTokenInfo(pos.asset_symbol);
             const isPositive = pos.pnlValue >= 0;
             const hasQuote = pos.estimatedValueNum > 0;
+            const hasInvested = pos.investedNum > 0 || (parseFloat(pos.invested) || 0) > 0;
+            // Si no hay precio de Redis, usar invested como fallback para mostrar algo
+            const displayValue = hasQuote ? pos.estimatedValueNum : (pos.investedNum || parseFloat(pos.invested) || 0);
+            const displayPnlValue = hasQuote ? pos.pnlValue : 0;
+            const displayPnlPercent = hasQuote ? pos.pnlPercent : 0;
 
             return (
               <div key={pos.asset} className="px-8 py-6 transition hover:bg-stone-50/50">
@@ -271,7 +276,9 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
                         Market Value
                       </span>
                       <span className="font-mono text-sm font-bold text-[#0C1424]">
-                        {hasQuote ? `$${pos.estimatedValueNum.toFixed(4)} USD` : 'Calculating…'}
+                        {displayValue > 0
+                          ? `$${displayValue.toFixed(4)} USD${!hasQuote ? ' (cost)' : ''}`
+                          : 'No balance'}
                       </span>
                     </div>
 
@@ -279,28 +286,34 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
                       <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
                         Return
                       </span>
-                      {hasQuote && pos.investedNum > 0 ? (
+                      {hasQuote && hasInvested ? (
                         <div className="flex items-center gap-1.5">
                           <span className={`inline-block font-mono text-xs font-bold rounded px-2 py-0.5 ${isPositive ? 'bg-[#2540EB]/5 text-[#2540EB] border border-[#2540EB]/10' : 'bg-stone-100 text-[#6B7280] border border-stone-200/60'}`}>
-                            {isPositive ? '+' : ''}{pos.pnlPercent.toFixed(2)}%
+                            {isPositive ? '+' : ''}{displayPnlPercent.toFixed(2)}%
                           </span>
                           <span className="font-mono text-[11px] text-[#6B7280]">
-                            ({isPositive ? '+' : ''}${Math.abs(pos.pnlValue).toFixed(4)})
+                            ({isPositive ? '+' : ''}${Math.abs(displayPnlValue).toFixed(4)})
                           </span>
                         </div>
+                      ) : hasInvested ? (
+                        <span className="text-xs font-medium text-[#6B7280]">
+                          Invested: ${hasInvested ? (pos.investedNum || parseFloat(pos.invested) || 0).toFixed(4)}
+                        </span>
                       ) : (
                         <span className="text-xs font-medium text-[#6B7280]">
-                          {info.ticker === 'USDT' ? 'Stable' : 'Basis unavailable'}
+                          {info.ticker === 'USDT' ? 'Stable' : 'No investment yet'}
                         </span>
                       )}
                     </div>
 
                     <div className="space-y-1">
                       <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
-                        Status
+                        Invested
                       </span>
-                      <span className="inline-block rounded border border-[#2540EB]/10 bg-[#2540EB]/5 px-2.5 py-0.5 text-[11px] font-bold text-[#2540EB]">
-                        On-chain balance
+                      <span className="font-mono text-sm font-bold text-[#0C1424]">
+                        {hasInvested
+                          ? `$${(pos.investedNum || parseFloat(pos.invested) || 0).toFixed(4)}`
+                          : '—'}
                       </span>
                     </div>
                   </div>

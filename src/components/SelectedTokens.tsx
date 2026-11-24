@@ -37,6 +37,79 @@ interface SelectedTokensProps {
   tokenConfig?: TokenConfigItem[];
 }
 
+// Pre-built logos to avoid JSX-in-function parser issues with SWC
+const LOGOS: Record<string, React.ReactNode> = {
+  ETH: <EthLogo className="h-9 w-9 shrink-0" />,
+  WETH: <EthLogo className="h-9 w-9 shrink-0" />,
+  BTC: <BtcLogo className="h-9 w-9 shrink-0" />,
+  WBTC: <BtcLogo className="h-9 w-9 shrink-0" />,
+  BTCB: <BtcLogo className="h-9 w-9 shrink-0" />,
+  USDT: <UsdtLogo className="h-9 w-9 shrink-0" />,
+};
+
+const NAMES: Record<string, string> = {
+  ETH: 'Ethereum',
+  WETH: 'Ethereum',
+  BTC: 'Bitcoin',
+  WBTC: 'Bitcoin',
+  BTCB: 'Bitcoin',
+  USDT: 'Tether USD',
+};
+
+function getTokenInfo(symbol: string, tokenConfig: TokenConfigItem[]) {
+  const sym = (symbol || '').toUpperCase();
+  const cfg = tokenConfig.find((t) => t.symbol.toUpperCase() === sym);
+  const stopLossLabel = cfg ? `${cfg.stopLossPct}% Max Loss` : '5% Max Loss';
+  const takeProfitLabel = cfg ? `${cfg.takeProfitPct}% Target Profit` : '15% Target Profit';
+
+  if (sym === 'USDT' || sym === 'USD₮') {
+    return {
+      name: 'Tether USD',
+      ticker: 'USDT',
+      logo: LOGOS['USDT'],
+      stopLoss: 'Peg Guard',
+      takeProfit: 'Stable',
+    };
+  }
+
+  if (sym === 'ETH' || sym === 'WETH') {
+    return {
+      name: 'Ethereum',
+      ticker: 'ETH',
+      logo: LOGOS['ETH'],
+      stopLoss: stopLossLabel,
+      takeProfit: takeProfitLabel,
+    };
+  }
+
+  if (sym === 'BTC' || sym === 'WBTC' || sym === 'BTCB') {
+    return {
+      name: 'Bitcoin',
+      ticker: sym === 'BTCB' ? 'BTCB' : 'BTC',
+      logo: LOGOS['BTCB'],
+      stopLoss: stopLossLabel,
+      takeProfit: takeProfitLabel,
+    };
+  }
+
+  // Default fallback
+  return {
+    name: symbol || 'Selected Token',
+    ticker: (symbol || 'TKN').slice(0, 6),
+    logo: null,
+    stopLoss: stopLossLabel,
+    takeProfit: takeProfitLabel,
+  };
+}
+
+function FallbackLogo({ symbol }: { symbol: string }) {
+  return (
+    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-200 text-[10px] font-bold text-stone-600">
+      {(symbol || 'TKN').slice(0, 3)}
+    </div>
+  );
+}
+
 export const SelectedTokens: React.FC<SelectedTokensProps> = ({
   positions,
   portfolioAddress,
@@ -44,62 +117,6 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
   tokenConfig = [],
 }) => {
   const [showConfig, setShowConfig] = useState(false);
-
-  const getTokenInfo = (symbol: string) => {
-    // Buscar config desde la DB primero
-    const cfg = tokenConfig.find(
-      (t) => t.symbol.toUpperCase() === symbol?.toUpperCase()
-    );
-
-    const stopLossLabel = cfg
-      ? `${cfg.stopLossPct}% Max Loss`
-      : '5% Max Loss';
-    const takeProfitLabel = cfg
-      ? `${cfg.takeProfitPct}% Target Profit`
-      : '15% Target Profit';
-
-    switch (symbol?.toUpperCase()) {
-      case 'WETH':
-      case 'ETH':
-        return {
-          name: 'Ethereum',
-          ticker: 'ETH',
-          logo: <EthLogo className="h-9 w-9 shrink-0" />,
-          stopLoss: stopLossLabel,
-          takeProfit: takeProfitLabel,
-        };
-      case 'WBTC':
-      case 'BTCB':
-        return {
-          name: 'Bitcoin',
-          ticker: symbol?.toUpperCase() === 'BTCB' ? 'BTCB' : 'BTC',
-          logo: <BtcLogo className="h-9 w-9 shrink-0" />,
-          stopLoss: stopLossLabel,
-          takeProfit: takeProfitLabel,
-        };
-      case 'USD₮':
-      case 'USDT':
-        return {
-          name: 'Tether USD',
-          ticker: 'USDT',
-          logo: <UsdtLogo className="h-9 w-9 shrink-0" />,
-          stopLoss: 'Peg Guard',
-          takeProfit: 'Stable',
-        };
-      default:
-        return {
-          name: symbol || 'Selected Token',
-          ticker: symbol?.slice(0, 6) || 'TKN',
-          logo: (
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-stone-200 text-[10px] font-bold text-stone-600">
-              {symbol?.slice(0, 3) || 'TKN'}
-            </div>
-          ),
-          stopLoss: stopLossLabel,
-          takeProfit: takeProfitLabel,
-        };
-    }
-  };
 
   return (
     <div
@@ -148,13 +165,13 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
         ) : positions.length === 0 && tokenConfig.length > 0 ? (
           /* === MODO CONFIGURACIÓN: tokens seleccionados sin balance on-chain aún === */
           tokenConfig.map((tk) => {
-            const info = getTokenInfo(tk.symbol);
+            const info = getTokenInfo(tk.symbol, tokenConfig);
             return (
               <div key={tk.symbol} className="px-8 py-6 transition hover:bg-stone-50/50">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                   {/* Token Identity */}
                   <div className="flex items-center gap-4">
-                    {info.logo}
+                    {info.logo || <FallbackLogo symbol={tk.symbol} />}
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-[#0C1424]" style={{ fontFamily: 'var(--font-inter)' }}>
@@ -172,7 +189,6 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
 
                   {/* Risk Config */}
                   <div className="flex flex-wrap items-center gap-8 sm:gap-10">
-                    {/* Allocation */}
                     <div className="space-y-1">
                       <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
                         Allocation
@@ -182,7 +198,6 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
                       </span>
                     </div>
 
-                    {/* Stop Loss */}
                     <div className="space-y-1">
                       <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
                         Stop Loss
@@ -192,7 +207,6 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
                       </span>
                     </div>
 
-                    {/* Take Profit */}
                     <div className="space-y-1">
                       <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
                         Take Profit
@@ -202,7 +216,6 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
                       </span>
                     </div>
 
-                    {/* Status */}
                     <div className="space-y-1">
                       <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
                         Status
@@ -214,7 +227,6 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
                   </div>
                 </div>
 
-                {/* Safety Limits Detail */}
                 {showConfig && (
                   <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-stone-200/60 bg-stone-50/50 px-5 py-4 text-xs text-[#6B7280]">
                     <div className="max-w-md">
@@ -239,11 +251,10 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
         ) : (
           /* === MODO LIVE: positions on-chain con balances reales === */
           positions.map((pos) => {
-            const info = getTokenInfo(pos.asset_symbol);
+            const info = getTokenInfo(pos.asset_symbol, tokenConfig);
             const isPositive = pos.pnlValue >= 0;
             const hasQuote = pos.estimatedValueNum > 0;
             const hasInvested = pos.investedNum > 0 || (parseFloat(pos.invested) || 0) > 0;
-            // Si no hay precio de Redis, usar invested como fallback para mostrar algo
             const displayValue = hasQuote ? pos.estimatedValueNum : (pos.investedNum || parseFloat(pos.invested) || 0);
             const displayPnlValue = hasQuote ? pos.pnlValue : 0;
             const displayPnlPercent = hasQuote ? pos.pnlPercent : 0;
@@ -252,7 +263,7 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
               <div key={pos.asset} className="px-8 py-6 transition hover:bg-stone-50/50">
                 <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-center gap-4">
-                    {info.logo}
+                    {info.logo || <FallbackLogo symbol={pos.asset_symbol} />}
                     <div className="space-y-0.5">
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-bold text-[#0C1424]" style={{ fontFamily: 'var(--font-inter)' }}>
@@ -297,7 +308,7 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
                         </div>
                       ) : hasInvested ? (
                         <span className="text-xs font-medium text-[#6B7280]">
-                          Invested: ${hasInvested ? (pos.investedNum || parseFloat(pos.invested) || 0).toFixed(4)}
+                          Invested: ${(pos.investedNum || parseFloat(pos.invested) || 0).toFixed(4)}
                         </span>
                       ) : (
                         <span className="text-xs font-medium text-[#6B7280]">

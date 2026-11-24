@@ -109,7 +109,27 @@ const [deploymentTx, setDeploymentTx] = useState<string | null>(null);
   const TOKENS_PER_PAGE = 8;
   const RISK_PER_PAGE = 6;
 
-  // ---- Load profile by wallet address ----
+  // ---- Check DB for existing user (contract already deployed) ----
+  const checkExistingUser = useCallback(async (addr: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/user/${addr}`);
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data.exists && data.hasContract) {
+        // Usuario ya tiene contrato deployado → guardar y redirigir
+        localStorage.setItem('stockWalletAddress', data.contract.address);
+        localStorage.setItem('vigi_user_wallet', addr.toLowerCase());
+        router.push('/dashboard');
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error checking existing user:', err);
+      return false;
+    }
+  }, [router]);
+
+  // ---- Load profile by wallet address (localStorage fallback) ----
   const loadProfile = useCallback((addr: string): number => {
     const key = `vigi_profile_${addr.toLowerCase()}`;
     const stored = localStorage.getItem(key);
@@ -188,12 +208,15 @@ const [deploymentTx, setDeploymentTx] = useState<string | null>(null);
       setWalletAddress(addr);
       await switchToBSC(provider);
 
-      // Load saved profile and resume where they left off
+      // 1. Check DB — ¿usuario ya tiene contrato deployado?
+      const exists = await checkExistingUser(addr);
+      if (exists) return; // redirigió al dashboard
+
+      // 2. No existe en DB → cargar profile local (localStorage)
       setIsLoadingProfile(true);
       setLoadingProfile(true);
       const lastStep = loadProfile(addr);
       setLoadingProfile(false);
-      // Use setTimeout to ensure state updates from loadProfile are applied before step change
       setTimeout(() => {
         setIsLoadingProfile(false);
         setStep(lastStep > 1 ? lastStep : 2);
@@ -207,16 +230,22 @@ const [deploymentTx, setDeploymentTx] = useState<string | null>(null);
     } finally {
       setIsConnecting(false);
     }
-  }, [loadProfile]);
+  }, [loadProfile, checkExistingUser]);
 
   // ---- Check if already connected on mount ----
   useEffect(() => {
     const provider = getMetaMaskProvider();
     if (!provider) return;
-    provider.request({ method: 'eth_accounts' }).then((accounts: string[]) => {
+    provider.request({ method: 'eth_accounts' }).then(async (accounts: string[]) => {
       if (accounts && accounts.length > 0) {
         const addr = accounts[0];
         setWalletAddress(addr);
+
+        // 1. Check DB first — ¿usuario ya tiene contrato?
+        const exists = await checkExistingUser(addr);
+        if (exists) return; // redirigió al dashboard
+
+        // 2. No existe en DB → cargar profile local
         setIsLoadingProfile(true);
         setLoadingProfile(true);
         const lastStep = loadProfile(addr);
@@ -227,16 +256,22 @@ const [deploymentTx, setDeploymentTx] = useState<string | null>(null);
         }, 0);
       }
     }).catch(() => {});
-  }, [loadProfile]);
+  }, [loadProfile, checkExistingUser]);
 
   // ---- Listen for account changes ----
   useEffect(() => {
     const provider = getMetaMaskProvider();
     if (provider && provider.on) {
-      const handleAccountsChanged = (accounts: string[]) => {
+      const handleAccountsChanged = async (accounts: string[]) => {
         if (accounts && accounts.length > 0) {
           const addr = accounts[0];
           setWalletAddress(addr);
+
+          // Check DB first — ¿usuario ya tiene contrato?
+          const exists = await checkExistingUser(addr);
+          if (exists) return; // redirigió al dashboard
+
+          // No existe en DB → cargar profile local
           setIsLoadingProfile(true);
           setLoadingProfile(true);
           const lastStep = loadProfile(addr);

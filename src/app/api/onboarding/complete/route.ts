@@ -102,6 +102,15 @@ export async function POST(req: NextRequest) {
             [chainId, token.address, BSC_USDT, feeTier]
           );
         }
+
+        // Guardar config del token (allocation, SL, TP)
+        await client.query(
+          `INSERT INTO user_token_config (wallet_id, token_symbol, token_address, allocation_pct, stop_loss_pct, take_profit_pct)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (wallet_id, token_symbol) DO UPDATE
+           SET allocation_pct = $4, stop_loss_pct = $5, take_profit_pct = $6`,
+          [walletId, token.symbol, token.address, token.allocationPct, token.stopLossPct, token.takeProfitPct]
+        );
       }
 
       // 5. Log the onboarding as an activity

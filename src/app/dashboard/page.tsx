@@ -18,26 +18,156 @@ export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'tokens' | 'reserve' | 'audit'>(
     'overview'
   );
+  const [contractAddress, setContractAddress] = useState<string | null>(null);
+  const [tokenConfig, setTokenConfig] = useState<any[]>([]);
+  const [distribution, setDistribution] = useState({
+    tokensPct: 78,
+    aiAgentPct: 20,
+    gasPct: 2,
+  });
 
-  const fetchData = useCallback(async (isManual = false) => {
-    if (isManual) setRefreshing(true);
-    try {
-      const res = await fetch('/api/dashboard');
-      const json = await res.json();
-      if (json.success) {
-        setData(json.data);
+  // ---- Detectar contrato del usuario al cargar ----
+  useEffect(() => {
+    // 1. Intentar desde localStorage (guardado por onboarding)
+    const saved = localStorage.getItem('stockWalletAddress');
+    if (saved && saved !== '0x0000000000000000000000000000000000000000') {
+      setContractAddress(saved);
+      // También buscar tokenConfig desde la API
+      const provider = typeof window !== 'undefined' ? (window as any).ethereum : null;
+      if (provider) {
+        provider.request({ method: 'eth_accounts' }).then(async (accounts: string[]) => {
+          if (accounts && accounts.length > 0) {
+            try {
+              const res = await fetch(`/api/user/${accounts[0]}`);
+              if (res.ok) {
+                const userData = await res.json();
+                if (userData.tokenConfig) setTokenConfig(userData.tokenConfig);
+              }
+            } catch {}
+          }
+        }).catch(() => {});
       }
-    } catch (err) {
-      console.error('Error fetching dashboard data:', err);
-    } finally {
-      setLoading(false);
-      if (isManual) setRefreshing(false);
+      return;
+    }
+
+    // 2. Si no hay en localStorage, buscar por wallet address en MetaMask
+    const provider = typeof window !== 'undefined' ? (window as any).ethereum : null;
+    if (provider) {
+      provider
+        .request({ method: 'eth_accounts' })
+        .then(async (accounts: string[]) => {
+          if (accounts && accounts.length > 0) {
+            try {
+              const res = await fetch(`/api/user/${accounts[0]}`);
+              if (res.ok) {
+                const userData = await res.json();
+                if (userData.exists && userData.hasContract) {
+                  localStorage.setItem('stockWalletAddress', userData.contract.address);
+                  setContractAddress(userData.contract.address);
+                  if (userData.tokenConfig) setTokenConfig(userData.tokenConfig);
+                }
+              }
+            } catch (err) {
+              console.error('Error fetching user contract:', err);
+            }
+          }
+        })
+        .catch(() => {});
     }
   }, []);
 
+  const fetchData = useCallback(
+    async (isManual = false) => {
+      if (isManual) setRefreshing(true);
+      try {
+        const savedContract = contractAddress || localStorage.getItem('stockWalletAddress');
+        if (savedContract && savedContract !== '0x0000000000000000000000000000000000000000') {
+          // 1. Leer config de tokens directamente del contrato on-chain
+          const portfolioRes = await fetch(`/api/portfolio/${savedContract}`);
+          if (portfolioRes.ok) {
+            const portfolio = await portfolioRes.json();
+            const onChainAssets = portfolio.assets || [];
+
+            // Mapear al formato del dashboard
+            setData({
+              botState: { isPaused: false, pauseUntil: 0 },
+              aiCapital: null,
+              vaultPortfolio: {
+                address: savedContract,
+                positions: onChainAssets
+                  .filter((a: any) => parseFloat(a.balance) > 0)
+                  .map((a: any) => ({
+                    asset: a.address,
+                    asset_symbol: a.symbol,
+                    balance: a.balance,
+                    estimated_value: '0',
+                    invested: a.invested,
+                    action: 'hold',
+                  })),
+                totalValue: 0,
+              },
+              aave: { collateral: '0', debt: '0', healthFactor: 'N/A' },
+              balances: { USDT: portfolio.usdtBalance || '0' },
+              decisions: [],
+              trades: [],
+              botActivity: [],
+              positions: onChainAssets
+                .filter((a: any) => parseFloat(a.balance) > 0)
+                .map((a: any) => ({
+                  asset: a.address,
+                  asset_symbol: a.symbol,
+                  balance: a.balance,
+                  estimated_value: '0',
+                  invested: a.invested,
+                  action: 'hold',
+                })),
+              stats: {
+                totalActivities: 0,
+                totalDecisions: 0,
+                trackedAssets: onChainAssets.length,
+              },
+            });
+            // Guardar config on-chain para SelectedTokens
+            setTokenConfig(onChainAssets.map((a: any) => ({
+              symbol: a.symbol,
+              address: a.address,
+              allocationPct: a.allocationPct,
+              stopLossPct: a.stopLossPct,
+              takeProfitPct: a.takeProfitPct,
+            })));
+            // Guardar distribución leída del contrato (gasFee y adgentPercentage de storage slots)
+            if (portfolio.tokensPercentagePct !== undefined) {
+              setDistribution({
+                tokensPct: portfolio.tokensPercentagePct,
+                aiAgentPct: portfolio.adgentPercentagePct,
+                gasPct: portfolio.gasFeePct,
+              });
+            }
+            return;
+          }
+        }
+
+        // Fallback: dashboard general
+        const res = await fetch('/api/dashboard');
+        const json = await res.json();
+        if (json.success) {
+          setData(json.data);
+        }
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+      } finally {
+        setLoading(false);
+        if (isManual) setRefreshing(false);
+      }
+    },
+    [contractAddress]
+  );
+
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (contractAddress) {
+      fetchData();
+    }
+  }, [contractAddress, fetchData]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -84,7 +214,7 @@ export default function DashboardPage() {
   // Removed "Vigi Activity" tab — now lives permanently in the sidebar
   const tabs: Array<{ id: string; label: string; count?: number }> = [
     { id: 'overview', label: 'Portfolio' },
-    { id: 'tokens', label: 'Tokens 78%', count: portfolioPositions.length },
+    { id: 'tokens', label: 'Tokens 78%', count: portfolioPositions.length || tokenConfig.length },
     { id: 'reserve', label: 'Vigi Capital 20%' },
     { id: 'audit', label: 'Safety Log', count: stats.totalActivities },
   ];
@@ -155,6 +285,7 @@ export default function DashboardPage() {
                 positions={portfolioPositions}
                 portfolioAddress={vaultPortfolio?.address}
                 onAddFunds={() => setIsInvestModalOpen(true)}
+                tokenConfig={tokenConfig}
               />
               <CashReserve
                 aave={{
@@ -176,6 +307,7 @@ export default function DashboardPage() {
                 positions={portfolioPositions}
                 portfolioAddress={vaultPortfolio?.address}
                 onAddFunds={() => setIsInvestModalOpen(true)}
+                tokenConfig={tokenConfig}
               />
             </div>
           )}
@@ -254,6 +386,8 @@ export default function DashboardPage() {
       <InvestModal
         isOpen={isInvestModalOpen}
         onClose={() => setIsInvestModalOpen(false)}
+        tokenConfig={tokenConfig}
+        distribution={distribution}
       />
 
       {/* Footer */}

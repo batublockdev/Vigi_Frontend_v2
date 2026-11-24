@@ -35,16 +35,32 @@ type DepositStatus =
   | 'success'
   | 'error';
 
+interface TokenConfigItem {
+  symbol: string;
+  address: string;
+  allocationPct: number;
+  stopLossPct: number;
+  takeProfitPct: number;
+}
+
 interface InvestModalProps {
   isOpen: boolean;
   onClose: () => void;
   brlRate?: number;
+  tokenConfig?: TokenConfigItem[];
+  distribution?: {
+    tokensPct: number;
+    aiAgentPct: number;
+    gasPct: number;
+  };
 }
 
 export const InvestModal: React.FC<InvestModalProps> = ({
   isOpen,
   onClose,
   brlRate = 5.05,
+  tokenConfig = [],
+  distribution = { tokensPct: 78, aiAgentPct: 20, gasPct: 2 },
 }) => {
   // Wallet Connection State
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -382,12 +398,21 @@ export const InvestModal: React.FC<InvestModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Allocation: 78% Tokens, 20% AI Agent, 2% Gas
-  const gasAmount = numAmount * 0.02;
-  const agentAmount = numAmount * 0.20;
-  const tokensAmount = numAmount * 0.78;
-  const ethAmount = numAmount * 0.39;
-  const btcAmount = numAmount * 0.39;
+  // Distribution: leída del contrato on-chain (gasFee y adgentPercentage de storage slots)
+  const gasPct = distribution.gasPct;
+  const aiAgentPct = distribution.aiAgentPct;
+  const tokensPct = distribution.tokensPct;
+  const gasAmount = numAmount * (gasPct / 100);
+  const agentAmount = numAmount * (aiAgentPct / 100);
+  const tokensAmount = numAmount * (tokensPct / 100);
+
+  // Calcular monto por token basado en allocationPct del contrato
+  // allocationPct ya está en porcentaje (20, 10, 30, etc.) y suma 100 entre todos
+  const tokenAmounts = tokenConfig.map((tk) => ({
+    symbol: tk.symbol,
+    allocationPct: tk.allocationPct,
+    amount: tokensAmount * (tk.allocationPct / 100),
+  }));
 
   const hasInsufficientBalance =
     walletAddress !== null &&
@@ -404,7 +429,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-3 sm:p-4 overflow-y-auto">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-6">
+      <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl animate-in fade-in zoom-in-95 duration-150 my-6">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
@@ -605,7 +630,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({
             )}
           </div>
 
-          {/* ALLOCATION BREAKDOWN (78% / 20% / 2%) */}
+          {/* ALLOCATION BREAKDOWN — dinámico desde contrato on-chain */}
           <div className="rounded-xl border border-slate-100 bg-slate-50 p-3 space-y-2 text-xs">
             <div className="flex items-center justify-between border-b border-slate-200/60 pb-1.5">
               <span className="font-extrabold text-slate-800 text-[11px]">Distribution</span>
@@ -614,48 +639,46 @@ export const InvestModal: React.FC<InvestModalProps> = ({
               </span>
             </div>
 
-            {/* 1. Selected Tokens (78%) */}
+            {/* 1. Selected Tokens — porcentaje dinámico del contrato */}
             <div className="space-y-0.5">
               <div className="flex items-center justify-between text-[11px]">
-                <span className="font-bold text-slate-700">1. Selected Tokens (78%)</span>
+                <span className="font-bold text-slate-700">1. Selected Tokens ({tokensPct}%)</span>
                 <span className="font-mono font-bold text-slate-800">
                   {tokensAmount.toFixed(2)} {selectedToken}
                 </span>
               </div>
-              <div className="pl-2 space-y-0.5 text-[10px] text-slate-500">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    <EthLogo className="h-3 w-3" />
-                    <span>ETH (39%)</span>
-                  </div>
-                  <span className="font-mono">{ethAmount.toFixed(2)} {selectedToken}</span>
+              {tokenConfig.length > 0 ? (
+                <div className="pl-2 space-y-0.5 text-[10px] text-slate-500">
+                  {tokenAmounts.map((tk) => (
+                    <div key={tk.symbol} className="flex items-center justify-between">
+                      <span className="font-medium">{tk.symbol} ({tk.allocationPct}%)</span>
+                      <span className="font-mono">{tk.amount.toFixed(2)} {selectedToken}</span>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1">
-                    <BtcLogo className="h-3 w-3" />
-                    <span>BTC (39%)</span>
-                  </div>
-                  <span className="font-mono">{btcAmount.toFixed(2)} {selectedToken}</span>
+              ) : (
+                <div className="pl-2 text-[10px] text-slate-400 italic">
+                  Connect wallet to load token allocation from contract
                 </div>
-              </div>
+              )}
             </div>
 
-            {/* 2. Autonomous AI Agent (20%) */}
+            {/* 2. Autonomous AI Agent — porcentaje dinámico del contrato */}
             <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200/40">
               <div className="flex items-center gap-1">
                 <UsdtLogo className="h-3 w-3" />
-                <span className="font-bold text-slate-700">2. Autonomous AI (20%)</span>
+                <span className="font-bold text-slate-700">2. Autonomous AI ({aiAgentPct}%)</span>
               </div>
               <span className="font-bold font-mono text-emerald-700">
                 {agentAmount.toFixed(2)} {selectedToken}
               </span>
             </div>
 
-            {/* 3. Gas (2%) */}
+            {/* 3. Gas — porcentaje dinámico del contrato */}
             <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200/40">
               <div className="flex items-center gap-1">
                 <span className="text-amber-600 text-xs">⛽</span>
-                <span className="font-bold text-slate-700">3. Gas Reserve (2%)</span>
+                <span className="font-bold text-slate-700">3. Gas Reserve ({gasPct}%)</span>
               </div>
               <span className="font-bold font-mono text-amber-700">
                 {gasAmount.toFixed(2)} {selectedToken}

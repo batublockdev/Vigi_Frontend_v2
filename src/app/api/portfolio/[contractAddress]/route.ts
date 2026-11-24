@@ -9,7 +9,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createPublicClient, http, formatUnits, parseAbi, type Address } from 'viem';
 import { bsc } from 'viem/chains';
 
-const BSC_RPC = 'https://bsc-dataseed.binance.org';
+// BNB Chain RPC — public nodes are rate-limited from Vercel servers
+// Use a reliable endpoint, with env override for premium RPCs
+const BSC_RPC = process.env.BSC_RPC_URL || 'https://bsc-rpc.publicnode.com';
 
 const ABI = parseAbi([
   'function assets(uint256 index) view returns (address)',
@@ -57,23 +59,47 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid contract address' }, { status: 400 });
     }
 
-    const client = createPublicClient({
+    // Try multiple RPCs if the first one fails
+    let client = createPublicClient({
       chain: bsc,
       transport: http(BSC_RPC),
     });
 
+    // Helper: try reading contract, fallback to alternate RPCs
+    async function readWithFallback<T>(fn: () => Promise<T>): Promise<T> {
+      try {
+        return await fn();
+      } catch (err: any) {
+        // Try alternate RPCs
+        const fallbacks = ['https://rpc.ankr.com/bsc', 'https://bsc-dataseed-1.binance.org', 'https://bsc-dataseed.binance.org'];
+        for (const rpc of fallbacks) {
+          try {
+            client = createPublicClient({ chain: bsc, transport: http(rpc) });
+            return await fn();
+          } catch {
+            continue;
+          }
+        }
+        throw err;
+      }
+    }
+
     // Leer gasToken
-    const gasToken = await client.readContract({
-      address: contractAddress,
-      abi: ABI,
-      functionName: 'gasToken',
-    });
+    const gasToken = await readWithFallback(() =>
+      client.readContract({
+        address: contractAddress,
+        abi: ABI,
+        functionName: 'gasToken',
+      })
+    );
 
     // Leer gasFee y adgentPercentage desde storage slots (son private, no hay getter público)
-    // Slot 4: gasFee (uint256, BPS) — default 200 = 2%
-    // Slot 7: adgentPercentage (uint256, BPS) — default 500 = 5%
-    const gasFeeRaw = await client.getStorageAt({ address: contractAddress, slot: GAS_FEE_SLOT });
-    const adgentPctRaw = await client.getStorageAt({ address: contractAddress, slot: ADGENT_PERCENTAGE_SLOT });
+    const gasFeeRaw = await readWithFallback(() =>
+      client.getStorageAt({ address: contractAddress, slot: GAS_FEE_SLOT })
+    );
+    const adgentPctRaw = await readWithFallback(() =>
+      client.getStorageAt({ address: contractAddress, slot: ADGENT_PERCENTAGE_SLOT })
+    );
     const gasFeeBps = Number(BigInt(gasFeeRaw as `0x${string}`));
     const adgentPercentageBps = Number(BigInt(adgentPctRaw as `0x${string}`));
     // Tokens percentage = TOTAL_PERCENTAGE (10000) - gasFee - adgentPercentage
@@ -83,26 +109,32 @@ export async function GET(
     const assets: any[] = [];
     for (let i = 0; i < 20; i++) {
       try {
-        const tokenAddr = await client.readContract({
-          address: contractAddress,
-          abi: ABI,
-          functionName: 'assets',
-          args: [BigInt(i)],
-        });
+        const tokenAddr = await readWithFallback(() =>
+          client.readContract({
+            address: contractAddress,
+            abi: ABI,
+            functionName: 'assets',
+            args: [BigInt(i)],
+          })
+        );
 
-        const [allocationBps, stopLossBps, takeProfitBps] = await client.readContract({
-          address: contractAddress,
-          abi: ABI,
-          functionName: 'assetConfig',
-          args: [tokenAddr],
-        });
+        const [allocationBps, stopLossBps, takeProfitBps] = await readWithFallback(() =>
+          client.readContract({
+            address: contractAddress,
+            abi: ABI,
+            functionName: 'assetConfig',
+            args: [tokenAddr],
+          })
+        );
 
-        const [amount, invested] = await client.readContract({
-          address: contractAddress,
-          abi: ABI,
-          functionName: 'assetPosition',
-          args: [tokenAddr],
-        });
+        const [amount, invested] = await readWithFallback(() =>
+          client.readContract({
+            address: contractAddress,
+            abi: ABI,
+            functionName: 'assetPosition',
+            args: [tokenAddr],
+          })
+        );
 
         // Metadata del token
         const meta = TOKEN_META[tokenAddr.toLowerCase()] || {};
@@ -136,12 +168,14 @@ export async function GET(
         // Leer balance real del token en el contrato
         let balance = '0';
         try {
-          const rawBalance = await client.readContract({
-            address: tokenAddr,
-            abi: ABI,
-            functionName: 'balanceOf',
-            args: [contractAddress],
-          });
+          const rawBalance = await readWithFallback(() =>
+            client.readContract({
+              address: tokenAddr,
+              abi: ABI,
+              functionName: 'balanceOf',
+              args: [contractAddress],
+            })
+          );
           balance = formatUnits(rawBalance, decimals);
         } catch {
           // Si falla, dejar 0
@@ -176,12 +210,14 @@ export async function GET(
     // Leer balance USDT del contrato
     let usdtBalance = '0';
     try {
-      const rawUsdt = await client.readContract({
-        address: USDT_BSC,
-        abi: ABI,
-        functionName: 'balanceOf',
-        args: [contractAddress],
-      });
+      const rawUsdt = await readWithFallback(() =>
+        client.readContract({
+          address: USDT_BSC,
+          abi: ABI,
+          functionName: 'balanceOf',
+          args: [contractAddress],
+        })
+      );
       usdtBalance = formatUnits(rawUsdt, 18);
     } catch {
       // ignore

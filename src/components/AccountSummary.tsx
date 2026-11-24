@@ -11,6 +11,7 @@ interface AccountSummaryProps {
   totalGainPercent: number;
   showPerformance?: boolean;
   onAddFunds: () => void;
+  activeTokens?: string[];
 }
 
 export const AccountSummary: React.FC<AccountSummaryProps> = ({
@@ -22,6 +23,7 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({
   totalGainPercent,
   showPerformance = true,
   onAddFunds,
+  activeTokens = [],
 }) => {
   const isPositive = totalGainAmount >= 0;
 
@@ -172,7 +174,9 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({
               className="text-[11px] text-[#6B7280] mt-2 block"
               style={{ fontFamily: 'var(--font-inter)' }}
             >
-              Bitcoin (WBTC) &amp; Ethereum (WETH)
+              {activeTokens.length > 0
+                ? activeTokens.join(' · ')
+                : 'No active token positions yet'}
             </span>
           </div>
 

@@ -105,44 +105,60 @@ export default function DashboardPage() {
             const portfolio = await portfolioRes.json();
             const onChainAssets = portfolio.assets || [];
 
-            // Mapear al formato del dashboard
+            // Mapear al formato del dashboard, calculando estimated_value con precios de Redis
+            const positionsWithValues = onChainAssets
+              .filter((a: any) => parseFloat(a.balance) > 0)
+              .map((a: any) => {
+                // Buscar precio desde redisPrices (snapshot: tokenIn -> USDT)
+                const snap = redisPrices.find((p: any) => p.tokenIn?.toLowerCase() === a.address?.toLowerCase());
+                let estimatedValue = 0;
+                let investedNum = parseFloat(a.invested) || 0;
+                if (snap && snap.pricePerUnit) {
+                  // pricePerUnit es por 1 unidad entera del token (con 18 decimals normalmente)
+                  const pricePerUnitFloat = parseFloat(snap.pricePerUnit) / Math.pow(10, 18);
+                  const balanceNum = parseFloat(a.balance) || 0;
+                  // El precio está en USDT (18 decimals en BSC), ajustar:
+                  estimatedValue = balanceNum * pricePerUnitFloat;
+                }
+                const pnlValue = estimatedValue - investedNum;
+                const pnlPercent = investedNum > 0 ? (pnlValue / investedNum) * 100 : 0;
+                return {
+                  asset: a.address,
+                  asset_symbol: a.symbol,
+                  balance: a.balance,
+                  estimated_value: estimatedValue.toString(),
+                  invested: a.invested,
+                  action: 'hold',
+                  estimatedValueNum: estimatedValue,
+                  investedNum,
+                  pnlValue,
+                  pnlPercent,
+                };
+              });
+            const totalTokensValue = positionsWithValues.reduce((sum: number, p: any) => sum + p.estimatedValueNum, 0);
+            const usdtBalanceNum = parseFloat(portfolio.usdtBalance || '0');
+            const totalPortfolioValue = totalTokensValue + usdtBalanceNum;
+
             setData({
               botState: { isPaused: false, pauseUntil: 0 },
               aiCapital: null,
               vaultPortfolio: {
                 address: savedContract,
-                positions: onChainAssets
-                  .filter((a: any) => parseFloat(a.balance) > 0)
-                  .map((a: any) => ({
-                    asset: a.address,
-                    asset_symbol: a.symbol,
-                    balance: a.balance,
-                    estimated_value: '0',
-                    invested: a.invested,
-                    action: 'hold',
-                  })),
-                totalValue: 0,
+                positions: positionsWithValues,
+                totalValue: totalTokensValue,
               },
               aave: { collateral: '0', debt: '0', healthFactor: 'N/A' },
               balances: { USDT: portfolio.usdtBalance || '0' },
               decisions: [],
               trades: [],
               botActivity: [],
-              positions: onChainAssets
-                .filter((a: any) => parseFloat(a.balance) > 0)
-                .map((a: any) => ({
-                  asset: a.address,
-                  asset_symbol: a.symbol,
-                  balance: a.balance,
-                  estimated_value: '0',
-                  invested: a.invested,
-                  action: 'hold',
-                })),
+              positions: positionsWithValues,
               stats: {
                 totalActivities: 0,
                 totalDecisions: 0,
                 trackedAssets: onChainAssets.length,
               },
+              totalPortfolioValue,
             });
             // Guardar config on-chain para SelectedTokens
             setTokenConfig(onChainAssets.map((a: any) => ({
@@ -219,9 +235,11 @@ export default function DashboardPage() {
   const walletUsdtUSD = parseFloat(balances['USDT'] || '0');
   const portfolioPositions = vaultPortfolio?.positions || [];
   const tokensValueUSD = vaultPortfolio?.totalValue || 0;
-  const totalBalanceUSD = aaveCollateralUSD + walletUsdtUSD + tokensValueUSD;
-  const totalGainAmountUSD = 0;
-  const totalGainPercent = 0;
+  const totalBalanceUSD = data?.totalPortfolioValue || (aaveCollateralUSD + walletUsdtUSD + tokensValueUSD);
+  // Calcular P&L total: suma de (estimatedValue - invested) de todas las posiciones
+  const totalInvestedUSD = portfolioPositions.reduce((sum: number, p: any) => sum + (p.investedNum || parseFloat(p.invested) || 0), 0);
+  const totalGainAmountUSD = tokensValueUSD - totalInvestedUSD;
+  const totalGainPercent = totalInvestedUSD > 0 ? (totalGainAmountUSD / totalInvestedUSD) * 100 : 0;
 
   // Latest decision for CashReserve — always the most recent, including hold
   const latestDecision = decisions[0] || null;
@@ -240,8 +258,8 @@ export default function DashboardPage() {
   // Removed "Vigi Activity" tab — now lives permanently in the sidebar
   const tabs: Array<{ id: string; label: string; count?: number }> = [
     { id: 'overview', label: 'Portfolio' },
-    { id: 'tokens', label: 'Tokens 78%', count: portfolioPositions.length || tokenConfig.length },
-    { id: 'reserve', label: 'Vigi Capital 20%' },
+    { id: 'tokens', label: `Tokens ${distribution.tokensPct}%`, count: portfolioPositions.length || tokenConfig.length },
+    { id: 'reserve', label: `Vigi Capital ${distribution.aiAgentPct}%` },
     { id: 'audit', label: 'Safety Log', count: stats.totalActivities },
   ];
 
@@ -268,8 +286,9 @@ export default function DashboardPage() {
             cashValue={walletUsdtUSD}
             totalGainAmount={totalGainAmountUSD}
             totalGainPercent={totalGainPercent}
-            showPerformance={false}
+            showPerformance={totalInvestedUSD > 0}
             onAddFunds={() => setIsInvestModalOpen(true)}
+            activeTokens={portfolioPositions.map((p: any) => p.asset_symbol).filter(Boolean)}
           />
 
           {/* Tab Navigation */}

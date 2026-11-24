@@ -116,12 +116,12 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
             Selected Tokens &amp; Safety Limits
           </h2>
           <p className="text-xs text-[#6B7280]">
-            Live token balances held by the portfolio vault on Celo.
+            Live token balances held by the portfolio vault on BNB Chain.
           </p>
           {portfolioAddress && (
             <a
               className="mt-1.5 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-[#2540EB] hover:underline"
-              href={`https://celoscan.io/address/${portfolioAddress}`}
+              href={`https://bscscan.com/address/${portfolioAddress}`}
               target="_blank"
               rel="noreferrer"
             >

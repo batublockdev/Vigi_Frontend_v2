@@ -136,7 +136,7 @@ export const CashReserve: React.FC<CashReserveProps> = ({ aave, accountAddress, 
             {accountAddress && (
               <a
                 className="inline-flex items-center gap-1.5 font-mono text-[11px] text-[#2540EB] hover:text-[#0C1424] transition-colors pt-1"
-                href={`https://celoscan.io/address/${accountAddress}`}
+                href={`https://bscscan.com/address/${accountAddress}`}
                 target="_blank"
                 rel="noreferrer"
                 style={{ fontFamily: 'var(--font-inter)' }}
@@ -173,7 +173,7 @@ export const CashReserve: React.FC<CashReserveProps> = ({ aave, accountAddress, 
             <span className="text-xs font-medium text-[#6B7280]" style={{ fontFamily: 'var(--font-inter)' }}>USD</span>
           </div>
           <p className="mt-4 text-xs text-[#6B7280] leading-relaxed" style={{ fontFamily: 'var(--font-inter)' }}>
-            {tokenBalances ? 'Capital real leyéndose on-chain desde Celo' : 'Lectura on-chain no disponible'}
+            {tokenBalances ? 'Capital real leyéndose on-chain desde BNB Chain' : 'Lectura on-chain no disponible'}
           </p>
         </div>
 
@@ -189,7 +189,7 @@ export const CashReserve: React.FC<CashReserveProps> = ({ aave, accountAddress, 
           <p className="mt-4 text-xs text-[#6B7280] leading-relaxed" style={{ fontFamily: 'var(--font-inter)' }}>
             {tokenBalances
               ? `${parseFloat(tokenBalances.USDT).toFixed(4)} USDT liquid · ${parseFloat(tokenBalances.aCelUSDT).toFixed(4)} aCelUSDT generating yield`
-              : 'No se pudieron leer los tokens desde Celo'}
+              : 'No se pudieron leer los tokens desde BNB Chain'}
           </p>
         </div>
 
@@ -218,7 +218,7 @@ export const CashReserve: React.FC<CashReserveProps> = ({ aave, accountAddress, 
             </span>
           </div>
           <p className="mt-4 text-xs text-[#6B7280] leading-relaxed" style={{ fontFamily: 'var(--font-inter)' }}>
-            {accountAddress ? 'Vigi opera solo · confidence ≥ 70% para ejecutar' : 'Verificar conexión RPC de Celo'}
+            {accountAddress ? 'Vigi opera solo · confidence ≥ 70% para ejecutar' : 'Verificar conexión RPC de BNB Chain'}
           </p>
         </div>
       </div>
@@ -304,12 +304,12 @@ export const CashReserve: React.FC<CashReserveProps> = ({ aave, accountAddress, 
                         Transacción
                       </span>
                       <a
-                        href={`https://celoscan.io/tx/${txHash}`}
+                        href={`https://bscscan.com/tx/${txHash}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-[11px] font-medium text-[#2540EB] hover:text-white transition-colors mt-1"
                       >
-                        <span>Ver en Celoscan</span>
+                        <span>Ver en BscScan</span>
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     </div>
@@ -322,12 +322,12 @@ export const CashReserve: React.FC<CashReserveProps> = ({ aave, accountAddress, 
                         Pago x402 (consulta IA)
                       </span>
                       <a
-                        href={`https://celoscan.io/tx/${latestDecision.payment_tx}`}
+                        href={`https://bscscan.com/tx/${latestDecision.payment_tx}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-[11px] font-medium text-[#2540EB] hover:text-white transition-colors mt-1"
                       >
-                        <span>0.003 USDC · Ver pago</span>
+                        <span>0.003 USDC · Ver pago en BscScan</span>
                         <ExternalLink className="h-3 w-3" />
                       </a>
                     </div>

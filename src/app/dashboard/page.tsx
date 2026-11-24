@@ -93,6 +93,10 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // Store raw on-chain assets separately so we can recalc when redisPrices arrive
+  const [rawAssets, setRawAssets] = useState<any[]>([]);
+  const [rawUsdt, setRawUsdt] = useState('0');
+
   const fetchData = useCallback(
     async (isManual = false) => {
       if (isManual) setRefreshing(true);
@@ -104,62 +108,8 @@ export default function DashboardPage() {
           if (portfolioRes.ok) {
             const portfolio = await portfolioRes.json();
             const onChainAssets = portfolio.assets || [];
-
-            // Mapear al formato del dashboard, calculando estimated_value con precios de Redis
-            const positionsWithValues = onChainAssets
-              .filter((a: any) => parseFloat(a.balance) > 0)
-              .map((a: any) => {
-                // Buscar precio desde redisPrices (snapshot: tokenIn -> USDT)
-                const snap = redisPrices.find((p: any) => p.tokenIn?.toLowerCase() === a.address?.toLowerCase());
-                let estimatedValue = 0;
-                let investedNum = parseFloat(a.invested) || 0;
-                if (snap && snap.pricePerUnit) {
-                  // pricePerUnit es por 1 unidad entera del token (con 18 decimals normalmente)
-                  const pricePerUnitFloat = parseFloat(snap.pricePerUnit) / Math.pow(10, 18);
-                  const balanceNum = parseFloat(a.balance) || 0;
-                  // El precio está en USDT (18 decimals en BSC), ajustar:
-                  estimatedValue = balanceNum * pricePerUnitFloat;
-                }
-                const pnlValue = estimatedValue - investedNum;
-                const pnlPercent = investedNum > 0 ? (pnlValue / investedNum) * 100 : 0;
-                return {
-                  asset: a.address,
-                  asset_symbol: a.symbol,
-                  balance: a.balance,
-                  estimated_value: estimatedValue.toString(),
-                  invested: a.invested,
-                  action: 'hold',
-                  estimatedValueNum: estimatedValue,
-                  investedNum,
-                  pnlValue,
-                  pnlPercent,
-                };
-              });
-            const totalTokensValue = positionsWithValues.reduce((sum: number, p: any) => sum + p.estimatedValueNum, 0);
-            const usdtBalanceNum = parseFloat(portfolio.usdtBalance || '0');
-            const totalPortfolioValue = totalTokensValue + usdtBalanceNum;
-
-            setData({
-              botState: { isPaused: false, pauseUntil: 0 },
-              aiCapital: null,
-              vaultPortfolio: {
-                address: savedContract,
-                positions: positionsWithValues,
-                totalValue: totalTokensValue,
-              },
-              aave: { collateral: '0', debt: '0', healthFactor: 'N/A' },
-              balances: { USDT: portfolio.usdtBalance || '0' },
-              decisions: [],
-              trades: [],
-              botActivity: [],
-              positions: positionsWithValues,
-              stats: {
-                totalActivities: 0,
-                totalDecisions: 0,
-                trackedAssets: onChainAssets.length,
-              },
-              totalPortfolioValue,
-            });
+            setRawAssets(onChainAssets);
+            setRawUsdt(portfolio.usdtBalance || '0');
             // Guardar config on-chain para SelectedTokens
             setTokenConfig(onChainAssets.map((a: any) => ({
               symbol: a.symbol,
@@ -218,11 +168,71 @@ export default function DashboardPage() {
     return () => clearInterval(interval);
   }, [fetchData]);
 
+  // === Recalcular posiciones cuando rawAssets o redisPrices cambien ===
+  useEffect(() => {
+    if (rawAssets.length === 0) return;
+
+    const positionsWithValues = rawAssets
+      .filter((a: any) => parseFloat(a.balance) > 0)
+      .map((a: any) => {
+        const snap = redisPrices.find((p: any) => p.tokenIn?.toLowerCase() === a.address?.toLowerCase());
+        let estimatedValue = 0;
+        const investedNum = parseFloat(a.invested) || 0;
+        if (snap && snap.pricePerUnit) {
+          const pricePerUnitFloat = parseFloat(snap.pricePerUnit) / Math.pow(10, 18);
+          const balanceNum = parseFloat(a.balance) || 0;
+          estimatedValue = balanceNum * pricePerUnitFloat;
+        }
+        const pnlValue = estimatedValue - investedNum;
+        const pnlPercent = investedNum > 0 ? (pnlValue / investedNum) * 100 : 0;
+        return {
+          asset: a.address,
+          asset_symbol: a.symbol,
+          balance: a.balance,
+          estimated_value: estimatedValue.toString(),
+          invested: a.invested,
+          action: 'hold',
+          estimatedValueNum: estimatedValue,
+          investedNum,
+          pnlValue,
+          pnlPercent,
+        };
+      });
+
+    const totalTokensValue = positionsWithValues.reduce((sum: number, p: any) => sum + p.estimatedValueNum, 0);
+    const usdtBalanceNum = parseFloat(rawUsdt || '0');
+    const totalPortfolioValue = totalTokensValue + usdtBalanceNum;
+
+    const savedContract = contractAddress || localStorage.getItem('stockWalletAddress');
+
+    setData({
+      botState: { isPaused: false, pauseUntil: 0 },
+      aiCapital: null,
+      vaultPortfolio: {
+        address: savedContract || '',
+        positions: positionsWithValues,
+        totalValue: totalTokensValue,
+      },
+      aave: { collateral: '0', debt: '0', healthFactor: 'N/A' },
+      balances: { USDT: rawUsdt },
+      decisions: [],
+      trades: [],
+      botActivity: [],
+      positions: positionsWithValues,
+      stats: {
+        totalActivities: 0,
+        totalDecisions: 0,
+        trackedAssets: rawAssets.length,
+      },
+      totalPortfolioValue,
+    });
+  }, [rawAssets, redisPrices, rawUsdt, contractAddress]);
+
   const {
     botState,
     aiCapital,
     vaultPortfolio,
-    aave = { collateral: '1.08', debt: '0.00', healthFactor: 'Infinite' },
+    aave = { collateral: '0', debt: '0', healthFactor: 'N/A' },
     balances = {},
     decisions = [],
     trades = [],
@@ -236,7 +246,6 @@ export default function DashboardPage() {
   const portfolioPositions = vaultPortfolio?.positions || [];
   const tokensValueUSD = vaultPortfolio?.totalValue || 0;
   const totalBalanceUSD = data?.totalPortfolioValue || (aaveCollateralUSD + walletUsdtUSD + tokensValueUSD);
-  // Calcular P&L total: suma de (estimatedValue - invested) de todas las posiciones
   const totalInvestedUSD = portfolioPositions.reduce((sum: number, p: any) => sum + (p.investedNum || parseFloat(p.invested) || 0), 0);
   const totalGainAmountUSD = tokensValueUSD - totalInvestedUSD;
   const totalGainPercent = totalInvestedUSD > 0 ? (totalGainAmountUSD / totalInvestedUSD) * 100 : 0;

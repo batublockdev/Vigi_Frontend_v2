@@ -92,7 +92,7 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({
             className="text-xs text-[#6B7280] mt-2 max-w-md"
             style={{ fontFamily: 'var(--font-inter)' }}
           >
-            Current token balances read directly from the portfolio vault on Celo.
+            Current token balances read directly from the portfolio vault on BNB Chain.
           </p>
         </div>
 
@@ -234,7 +234,7 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({
               className="text-[11px] text-[#6B7280] mt-2 block"
               style={{ fontFamily: 'var(--font-inter)' }}
             >
-              Celo on-chain execution &amp; stop-loss triggers
+              BNB Chain on-chain execution &amp; stop-loss triggers
             </span>
           </div>
         </div>

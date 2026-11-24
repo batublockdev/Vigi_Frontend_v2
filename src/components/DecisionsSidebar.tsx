@@ -4,17 +4,20 @@ import React from 'react';
 import { ExternalLink, Activity, TrendingUp, TrendingDown, ArrowRightLeft, ShieldCheck, Clock, Bot } from 'lucide-react';
 
 export interface SidebarDecision {
-  id: number;
-  timestamp: string;
+  id: number | string;
+  timestamp: string | number;
   action: string;
   asset?: string | null;
   amount?: string | null;
   reason: string;
-  confidence: number;
-  level: string;
+  confidence?: number;
+  level?: string;
   executed: number;
   result?: string | null;
   tx_hash?: string | null;
+  // Redis/BullMQ fields
+  status?: string;
+  txHash?: string | null;
 }
 
 interface DecisionsSidebarProps {
@@ -59,8 +62,8 @@ export const DecisionsSidebar: React.FC<DecisionsSidebarProps> = ({
     return labels[action?.toLowerCase()] || action?.toUpperCase() || 'UNKNOWN';
   };
 
-  const formatDate = (timestamp: string) => {
-    const d = new Date(parseInt(timestamp, 10));
+  const formatDate = (timestamp: string | number) => {
+    const d = new Date(typeof timestamp === 'number' ? timestamp : parseInt(timestamp, 10));
     return d.toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
@@ -71,6 +74,7 @@ export const DecisionsSidebar: React.FC<DecisionsSidebarProps> = ({
 
   const extractTxHash = (dec: SidebarDecision): string | null => {
     if (dec.tx_hash) return dec.tx_hash;
+    if (dec.txHash) return dec.txHash;
     if (dec.result) {
       const match = dec.result.match(/0x[a-fA-F0-9]{64}/);
       if (match) return match[0];
@@ -82,6 +86,17 @@ export const DecisionsSidebar: React.FC<DecisionsSidebarProps> = ({
   const activeDecisions = decisions.filter(
     (d) => d.action?.toLowerCase() !== 'hold'
   );
+
+  // Determine status for display: Redis jobs have `status`, DB jobs use `executed`
+  const getStatusDisplay = (dec: SidebarDecision) => {
+    if (dec.status === 'confirmed' || dec.executed === 1) {
+      return { label: 'EXECUTED', color: 'text-emerald-600', dot: 'bg-emerald-500' };
+    }
+    if (dec.status === 'failed') {
+      return { label: 'FAILED', color: 'text-rose-600', dot: 'bg-rose-500' };
+    }
+    return { label: 'PENDING', color: 'text-ink-muted', dot: 'bg-stone-300' };
+  };
 
   return (
     <div
@@ -125,7 +140,7 @@ export const DecisionsSidebar: React.FC<DecisionsSidebarProps> = ({
         ) : (
           <div className="space-y-px bg-stone-200/40 rounded-2xl overflow-hidden">
             {activeDecisions.map((dec) => {
-              const wasExecuted = dec.executed === 1;
+              const statusDisplay = getStatusDisplay(dec);
               const txHash = extractTxHash(dec);
 
               return (
@@ -133,7 +148,7 @@ export const DecisionsSidebar: React.FC<DecisionsSidebarProps> = ({
                   key={dec.id}
                   className="p-5 hover:bg-white transition-colors duration-200 bg-[#FAFAF9]"
                 >
-                  {/* Top row: icon + action + confidence */}
+                  {/* Top row: icon + action */}
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2.5">
                       {getActionIcon(dec.action)}
@@ -141,7 +156,7 @@ export const DecisionsSidebar: React.FC<DecisionsSidebarProps> = ({
                         {getActionLabel(dec.action)}
                       </span>
                     </div>
-                    {dec.confidence > 0 && (
+                    {dec.confidence && dec.confidence > 0 && (
                       <span className="text-[10px] font-bold text-[#2540EB] bg-[#2540EB]/5 px-2 py-0.5 rounded-full">
                         {dec.confidence}%
                       </span>
@@ -176,21 +191,14 @@ export const DecisionsSidebar: React.FC<DecisionsSidebarProps> = ({
                     </span>
 
                     <div className="flex items-center gap-3">
-                      {wasExecuted ? (
-                        <span className="flex items-center gap-1 text-[10px] font-medium text-emerald-600">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                          <span>EXECUTED</span>
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1 text-[10px] font-medium text-ink-muted">
-                          <span className="h-1.5 w-1.5 rounded-full bg-stone-300" />
-                          <span>SKIP</span>
-                        </span>
-                      )}
+                      <span className={`flex items-center gap-1 text-[10px] font-medium ${statusDisplay.color}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusDisplay.dot}`} />
+                        <span>{statusDisplay.label}</span>
+                      </span>
 
                       {txHash && (
                         <a
-                          href={`https://celoscan.io/tx/${txHash}`}
+                          href={`https://bscscan.com/tx/${txHash}`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="inline-flex items-center gap-1 text-[10px] font-medium text-[#2540EB] hover:text-[#0C1424] transition-colors"
@@ -214,7 +222,7 @@ export const DecisionsSidebar: React.FC<DecisionsSidebarProps> = ({
           {activeDecisions.length} movimientos
         </span>
         <a
-          href="https://celoscan.io/address/0x74E16132B76Af0B03730F5c4BF540D777b085DDc"
+          href="https://bscscan.com/address/0xf43ea1700E117e9c456690514Db9C5b1405EC5E5"
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-[10px] font-medium text-[#2540EB] hover:text-[#0C1424] transition-colors"

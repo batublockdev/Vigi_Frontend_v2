@@ -11,7 +11,7 @@ const playfair = Playfair_Display({
 
 export const metadata: Metadata = {
   title: "Vigi Protocol — Turning Crisis Into Opportunity",
-  description: "Autonomous AI-driven DeFi investment system with zero-trust security on Celo. Stop-loss protection, take-profit harvesting, and AI-managed portfolios.",
+  description: "Autonomous AI-driven DeFi investment system with zero-trust security on BNB Chain. Stop-loss protection, take-profit harvesting, and AI-managed portfolios.",
 };
 
 export default function RootLayout({

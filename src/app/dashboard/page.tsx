@@ -15,9 +15,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [isInvestModalOpen, setIsInvestModalOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'tokens' | 'reserve' | 'audit'>(
-    'overview'
-  );
+  const [activeTab, setActiveTab] = useState<'overview' | 'tokens' | 'reserve' | 'audit'>('overview');
   const [contractAddress, setContractAddress] = useState<string | null>(null);
   const [tokenConfig, setTokenConfig] = useState<any[]>([]);
   const [distribution, setDistribution] = useState({
@@ -25,6 +23,25 @@ export default function DashboardPage() {
     aiAgentPct: 20,
     gasPct: 2,
   });
+  // Redis decisions (invest executions from BullMQ)
+  const [redisDecisions, setRedisDecisions] = useState<any[]>([]);
+  const [redisPrices, setRedisPrices] = useState<any[]>([]);
+
+  // ---- Fetch Redis decisions (invest executions) ----
+  const fetchRedisData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/decisions');
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success) {
+          setRedisDecisions(json.decisions || []);
+          setRedisPrices(json.prices || []);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching Redis decisions:', err);
+    }
+  }, []);
 
   // ---- Detectar contrato del usuario al cargar ----
   useEffect(() => {
@@ -168,6 +185,15 @@ export default function DashboardPage() {
       fetchData();
     }
   }, [contractAddress, fetchData]);
+
+  // Fetch Redis data on mount and every 15s alongside dashboard data
+  useEffect(() => {
+    fetchRedisData();
+    const interval = setInterval(() => {
+      fetchRedisData();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [fetchRedisData]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -339,46 +365,79 @@ export default function DashboardPage() {
         <div className="hidden lg:flex flex-col w-[340px] shrink-0">
           <div className="sticky top-6 h-[calc(100vh-120px)] rounded-2xl border border-stone-200/60 shadow-lg shadow-[#0C1424]/[0.03] overflow-hidden">
             <DecisionsSidebar decisions={[
-              // Combine all sources, dedupe by tx_hash, sort by date desc
-              ...(botActivity as any[]).map((a: any) => ({
-                id: 2000 + a.id,
-                timestamp: a.timestamp,
-                action: a.action,
-                asset: a.asset_symbol || a.asset,
-                amount: a.balance || a.estimated_value,
-                reason: a.reason || '',
-                confidence: a.confidence || 0,
+              // 1. Redis decisions (invest executions from BullMQ) — highest priority
+              ...redisDecisions.map((d: any) => ({
+                id: `redis-${d.id}`,
+                timestamp: d.timestamp,
+                action: d.action,
+                asset: d.contractAddress
+                  ? `${d.contractAddress.slice(0, 6)}...${d.contractAddress.slice(-4)}`
+                  : null,
+                amount: null,
+                reason: d.reason,
+                confidence: 0,
                 level: 'bot',
-                executed: a.tx_hash ? 1 : 0,
+                executed: d.status === 'confirmed' ? 1 : 0,
+                status: d.status,
+                tx_hash: d.txHash,
                 result: '',
-                tx_hash: a.tx_hash,
               })),
-              ...(decisions as any[]).filter((d: any) => {
-                // Skip if already in botActivity by tx_hash
-                const tx = d.tx_hash;
-                if (!tx) return d.action !== 'hold'; // keep non-hold without tx
-                return !(botActivity as any[]).some((a: any) => a.tx_hash === tx);
-              }),
-              ...(trades as any[]).filter((t: any) => {
-                // Skip if already in botActivity or decisions by tx_hash
-                const tx = t.tx_hash;
-                if (!tx) return true;
-                return !(botActivity as any[]).some((a: any) => a.tx_hash === tx) &&
-                       !(decisions as any[]).some((d: any) => d.tx_hash === tx);
-              }).map((t: any) => ({
-                id: 1000 + t.id,
-                timestamp: t.timestamp,
-                action: t.action,
-                asset: t.asset,
-                amount: t.amount,
-                reason: t.reason || '',
-                confidence: t.confidence || 0,
-                level: t.level || 'alto',
-                executed: 1,
-                result: '',
-                tx_hash: t.tx_hash,
-              })),
-            ].sort((a: any, b: any) => parseInt(b.timestamp) - parseInt(a.timestamp))} />
+              // 2. PostgreSQL bot activity (deposits, invests, failures)
+              ...(botActivity as any[])
+                .filter((a: any) => {
+                  // Skip if already in redisDecisions by tx_hash
+                  const tx = a.tx_hash;
+                  if (!tx) return true;
+                  return !redisDecisions.some((d: any) => d.txHash === tx);
+                })
+                .map((a: any) => ({
+                  id: 2000 + a.id,
+                  timestamp: a.timestamp,
+                  action: a.action,
+                  asset: a.asset_symbol || a.asset,
+                  amount: a.balance || a.estimated_value,
+                  reason: a.reason || '',
+                  confidence: a.confidence || 0,
+                  level: 'bot',
+                  executed: a.tx_hash ? 1 : 0,
+                  result: '',
+                  tx_hash: a.tx_hash,
+                })),
+              // 3. PostgreSQL decisions (AI agent LLM decisions)
+              ...(decisions as any[])
+                .filter((d: any) => {
+                  const tx = d.tx_hash;
+                  if (!tx) return d.action !== 'hold';
+                  return !(botActivity as any[]).some((a: any) => a.tx_hash === tx) &&
+                         !redisDecisions.some((r: any) => r.txHash === tx);
+                }),
+              // 4. PostgreSQL trades
+              ...(trades as any[])
+                .filter((t: any) => {
+                  const tx = t.tx_hash;
+                  if (!tx) return true;
+                  return !(botActivity as any[]).some((a: any) => a.tx_hash === tx) &&
+                         !(decisions as any[]).some((d: any) => d.tx_hash === tx) &&
+                         !redisDecisions.some((r: any) => r.txHash === tx);
+                })
+                .map((t: any) => ({
+                  id: 1000 + t.id,
+                  timestamp: t.timestamp,
+                  action: t.action,
+                  asset: t.asset,
+                  amount: t.amount,
+                  reason: t.reason || '',
+                  confidence: t.confidence || 0,
+                  level: t.level || 'alto',
+                  executed: 1,
+                  result: '',
+                  tx_hash: t.tx_hash,
+                })),
+            ].sort((a: any, b: any) => {
+              const ta = typeof a.timestamp === 'number' ? a.timestamp : parseInt(a.timestamp, 10);
+              const tb = typeof b.timestamp === 'number' ? b.timestamp : parseInt(b.timestamp, 10);
+              return tb - ta;
+            })} />
           </div>
         </div>
       </div>

@@ -6,6 +6,11 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+
+// Siempre ejecutar en runtime: los balances on-chain cambian con cada movimiento del vault.
+// Sin esto, Vercel cachea la respuesta y el dashboard muestra datos congelados.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 import { createPublicClient, http, formatUnits, parseAbi, type Address } from 'viem';
 import { bsc } from 'viem/chains';
 

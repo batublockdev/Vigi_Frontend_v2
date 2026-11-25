@@ -100,11 +100,11 @@ function getTokenInfo(symbol: string, tokenConfig: TokenConfigItem[]) {
     };
   }
 
-  // Default fallback
+  // Default fallback — usar logo del mapa si existe (NEAR, ZEC, FXION, etc.)
   return {
-    name: symbol || 'Selected Token',
+    name: NAMES[sym] || symbol || 'Selected Token',
     ticker: (symbol || 'TKN').slice(0, 6),
-    logo: null,
+    logo: LOGOS[sym] || null,
     stopLoss: stopLossLabel,
     takeProfit: takeProfitLabel,
   };

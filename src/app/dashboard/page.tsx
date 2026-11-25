@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { LogOut } from 'lucide-react';
 import { AccountSummary } from '@/components/AccountSummary';
 import { SelectedTokens } from '@/components/SelectedTokens';
 import { CashReserve } from '@/components/CashReserve';
@@ -26,6 +27,35 @@ export default function DashboardPage() {
   // Redis decisions (invest executions from BullMQ)
   const [redisDecisions, setRedisDecisions] = useState<any[]>([]);
   const [redisPrices, setRedisPrices] = useState<any[]>([]);
+
+  // ---- Logout: limpiar sesión local + desconectar wallet ----
+  const handleLogout = useCallback(async () => {
+    try {
+      localStorage.removeItem('stockWalletAddress');
+      const provider = typeof window !== 'undefined' ? (window as any).ethereum : null;
+      if (provider?.request) {
+        // Revoca el permiso otorgado a la dApp en MetaMask si el wallet lo soporta
+        try {
+          const accounts: string[] = await provider.request({ method: 'eth_accounts' });
+          if (accounts?.[0]) {
+            await provider.request({
+              method: 'wallet_revokePermissions',
+              params: [{ eth_accounts: {} }],
+            });
+          }
+        } catch {
+          // wallet sin soporte para revoke — seguimos con el logout local
+        }
+      }
+    } finally {
+      setContractAddress(null);
+      setTokenConfig([]);
+      setRawAssets([]);
+      setRawUsdt('0');
+      setData(null);
+      window.location.href = '/';
+    }
+  }, []);
 
   // ---- Fetch Redis decisions (invest executions) ----
   const fetchRedisData = useCallback(async () => {
@@ -288,13 +318,24 @@ export default function DashboardPage() {
       <div className="flex flex-1 gap-6 px-6 py-12">
         {/* Main content — fills all available width */}
         <main className="flex-1 min-w-0 space-y-8">
-          {/* Back link */}
-          <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>
-            <Link href="/" className="hover:text-[#2540EB] transition-colors">
-              ← Vigi Protocol
-            </Link>
-            <span className="text-stone-300">/</span>
-            <span className="text-[#0C1424]">Dashboard</span>
+          {/* Back link + Logout */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-wider text-ink-muted" style={{ fontFamily: 'var(--font-inter)' }}>
+              <Link href="/" className="hover:text-[#2540EB] transition-colors">
+                ← Vigi Protocol
+              </Link>
+              <span className="text-stone-300">/</span>
+              <span className="text-[#0C1424]">Dashboard</span>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 rounded-xl border border-stone-200 bg-white px-3.5 py-2 text-[11px] font-medium text-stone-500 transition hover:bg-stone-50 hover:text-stone-700 active:scale-95"
+              style={{ fontFamily: 'var(--font-inter)' }}
+              title="Disconnect wallet and clear session"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Log out
+            </button>
           </div>
 
           {/* Account Summary */}

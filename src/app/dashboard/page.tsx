@@ -253,6 +253,16 @@ export default function DashboardPage() {
   // Latest decision for CashReserve — always the most recent, including hold
   const latestDecision = decisions[0] || null;
 
+  // El % asignado al AI adgent viene del contrato (adgentPercentage). Si es 0,
+  // el vault no destina capital al agente autónomo → se oculta la sección.
+  const hasAiAgent = distribution.aiAgentPct > 0;
+
+  // Si la distribución cambia a 0% AI mientras el tab está activo, volver a Portfolio
+  // (siempre declarado ANTES del early return — Rules of Hooks)
+  useEffect(() => {
+    if (!hasAiAgent && activeTab === 'reserve') setActiveTab('overview');
+  }, [hasAiAgent, activeTab]);
+
   if (loading && !data) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center bg-[#F5F5F4] text-[#0C1424]">
@@ -265,21 +275,12 @@ export default function DashboardPage() {
   }
 
   // Removed "Vigi Activity" tab — now lives permanently in the sidebar
-  // El % asignado al AI adgent viene del contrato (adgentPercentage). Si es 0,
-  // el vault no destina capital al agente autónomo → se oculta la sección.
-  const hasAiAgent = distribution.aiAgentPct > 0;
-
   const tabs: Array<{ id: string; label: string; count?: number }> = [
     { id: 'overview', label: 'Portfolio' },
     { id: 'tokens', label: `Tokens ${distribution.tokensPct}%`, count: portfolioPositions.length || tokenConfig.length },
     ...(hasAiAgent ? [{ id: 'reserve' as const, label: `Vigi Capital ${distribution.aiAgentPct}%` }] : []),
     { id: 'audit', label: 'Safety Log', count: stats.totalActivities },
   ];
-
-  // Si la distribución cambia a 0% AI mientras el tab está activo, volver a Portfolio
-  useEffect(() => {
-    if (!hasAiAgent && activeTab === 'reserve') setActiveTab('overview');
-  }, [hasAiAgent, activeTab]);
 
   return (
     <div className="min-h-screen bg-[#F5F5F4] text-[#0C1424] flex flex-col">
@@ -487,7 +488,7 @@ export default function DashboardPage() {
         onClose={() => setIsInvestModalOpen(false)}
         tokenConfig={tokenConfig}
         distribution={distribution}
-        vaultAddress={contractAddress || localStorage.getItem('stockWalletAddress')}
+        vaultAddress={contractAddress || null}
       />
 
       {/* Footer */}

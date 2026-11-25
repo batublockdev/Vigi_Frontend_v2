@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { ExternalLink } from 'lucide-react';
-import { BtcLogo, EthLogo, UsdtLogo } from './CoinLogos';
+import { BtcLogo, EthLogo, UsdtLogo, NearLogo, ZecLogo, FxiLogo } from './CoinLogos';
 
 export interface PositionData {
   id: number;
@@ -45,6 +45,10 @@ const LOGOS: Record<string, React.ReactNode> = {
   WBTC: <BtcLogo className="h-9 w-9 shrink-0" />,
   BTCB: <BtcLogo className="h-9 w-9 shrink-0" />,
   USDT: <UsdtLogo className="h-9 w-9 shrink-0" />,
+  NEAR: <NearLogo className="h-9 w-9 shrink-0" />,
+  ZEC: <ZecLogo className="h-9 w-9 shrink-0" />,
+  FXI: <FxiLogo className="h-9 w-9 shrink-0" />,
+  FXLON: <FxiLogo className="h-9 w-9 shrink-0" />,
 };
 
 const NAMES: Record<string, string> = {
@@ -54,6 +58,10 @@ const NAMES: Record<string, string> = {
   WBTC: 'Bitcoin',
   BTCB: 'Bitcoin',
   USDT: 'Tether USD',
+  NEAR: 'NEAR Protocol',
+  ZEC: 'Zcash',
+  FXI: 'iShares China Large-Cap ETF',
+  FXLON: 'iShares China Large-Cap ETF',
 };
 
 function getTokenInfo(symbol: string, tokenConfig: TokenConfigItem[]) {
@@ -315,6 +323,24 @@ export const SelectedTokens: React.FC<SelectedTokensProps> = ({
                           {info.ticker === 'USDT' ? 'Stable' : 'No investment yet'}
                         </span>
                       )}
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                        Stop Loss
+                      </span>
+                      <span className="inline-block rounded border border-red-200/60 bg-red-50 px-2 py-0.5 text-[11px] font-bold text-red-700">
+                        -{info.stopLoss.replace('% Max Loss', '')}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#6B7280]">
+                        Take Profit
+                      </span>
+                      <span className="inline-block rounded border border-green-200/60 bg-green-50 px-2 py-0.5 text-[11px] font-bold text-green-700">
+                        +{info.takeProfit.replace('% Target Profit', '')}
+                      </span>
                     </div>
 
                     <div className="space-y-1">

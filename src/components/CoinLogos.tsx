@@ -88,6 +88,34 @@ export const BnbLogo: React.FC<{ className?: string }> = ({ className = 'h-7 w-7
   </svg>
 );
 
+export const NearLogo: React.FC<{ className?: string }> = ({ className = 'h-7 w-7' }) => (
+  <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="16" fill="#000000" />
+    <path
+      d="M22.184 8.577L19.386 12.73a.48.48 0 0 0 .04.586l.02.022a.486.486 0 0 0 .58.066l3.388-1.873a.35.35 0 0 1 .5.326l-.002 8.244a.352.352 0 0 1-.568.278L13.28 10.53a1.714 1.714 0 0 0-1.087-.386H9.355A1.356 1.356 0 0 0 8 11.5v9.001c0 .749.607 1.356 1.356 1.356h.7a1.356 1.356 0 0 0 1.356-1.356v-3.34a.14.14 0 0 1 .246-.093l.019.023"
+      fill="#00EC97"
+    />
+    <circle cx="16" cy="16" r="15.2" stroke="#00EC97" strokeOpacity="0.35" strokeWidth="0.8" fill="none" />
+  </svg>
+);
+
+export const ZecLogo: React.FC<{ className?: string }> = ({ className = 'h-7 w-7' }) => (
+  <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="16" fill="#F4B728" />
+    <path
+      d="M8.8 8.6h14.4v2.9l-8.7 8.7h8.7v2.9H8.8v-2.9l8.7-8.7H8.8V8.6zm5.8 15.9h2.9v2.9h-2.9v-2.9zm0-19.9h2.9v2.9h-2.9V4.5z"
+      fill="#FFFFFF"
+    />
+  </svg>
+);
+
+export const FxiLogo: React.FC<{ className?: string }> = ({ className = 'h-7 w-7' }) => (
+  <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="16" fill="#1E3A8A" />
+    <text x="16" y="21" textAnchor="middle" fontSize="11" fontWeight="bold" fill="#FFFFFF" fontFamily="Arial, sans-serif">FXI</text>
+  </svg>
+);
+
 export const MetaMaskLogo: React.FC<{ className?: string }> = ({ className = 'h-6 w-6' }) => (
   <svg className={className} viewBox="0 0 318.6 318.6" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path fill="#E2761B" stroke="#E2761B" strokeMiterlimit="10" d="M274.1 35.5l-99.5 73.9L194 65.4z" />

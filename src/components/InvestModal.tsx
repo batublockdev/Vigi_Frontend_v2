@@ -48,6 +48,8 @@ interface InvestModalProps {
   onClose: () => void;
   brlRate?: number;
   tokenConfig?: TokenConfigItem[];
+  /** Dirección del vault — destino directo de las compras por Ripio Ramp */
+  vaultAddress?: string | null;
   distribution?: {
     tokensPct: number;
     aiAgentPct: number;
@@ -60,7 +62,8 @@ export const InvestModal: React.FC<InvestModalProps> = ({
   onClose,
   brlRate = 5.05,
   tokenConfig = [],
-  distribution = { tokensPct: 78, aiAgentPct: 20, gasPct: 2 },
+  vaultAddress,
+  distribution = { tokensPct: 98, aiAgentPct: 0, gasPct: 2 },
 }) => {
   // Wallet Connection State
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -419,10 +422,15 @@ export const InvestModal: React.FC<InvestModalProps> = ({
     tokenBalance !== null &&
     (tokenBalance < numAmount || numAmount <= 0);
 
+  // Ripio Ramp compra los USDT y los envía DIRECTO al vault:
+  // si tenemos la dirección del contrato, esa es la wallet destino;
+  // fallback: la wallet conectada del usuario.
+  const ripioDestination = vaultAddress || walletAddress;
+
   const ripioRampUrl = buildRipioRampUrl(
     selectedToken,
     numAmount,
-    walletAddress,
+    ripioDestination,
     country,
     brlRate
   );
@@ -663,7 +671,8 @@ export const InvestModal: React.FC<InvestModalProps> = ({
               )}
             </div>
 
-            {/* 2. Autonomous AI Agent — porcentaje dinámico del contrato */}
+            {/* 2. Autonomous AI Agent — dinámico del contrato; oculto si es 0% */}
+            {aiAgentPct > 0 && (
             <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200/40">
               <div className="flex items-center gap-1">
                 <UsdtLogo className="h-3 w-3" />
@@ -673,6 +682,7 @@ export const InvestModal: React.FC<InvestModalProps> = ({
                 {agentAmount.toFixed(2)} {selectedToken}
               </span>
             </div>
+            )}
 
             {/* 3. Gas — porcentaje dinámico del contrato */}
             <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-200/40">

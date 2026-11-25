@@ -265,12 +265,21 @@ export default function DashboardPage() {
   }
 
   // Removed "Vigi Activity" tab — now lives permanently in the sidebar
+  // El % asignado al AI adgent viene del contrato (adgentPercentage). Si es 0,
+  // el vault no destina capital al agente autónomo → se oculta la sección.
+  const hasAiAgent = distribution.aiAgentPct > 0;
+
   const tabs: Array<{ id: string; label: string; count?: number }> = [
     { id: 'overview', label: 'Portfolio' },
     { id: 'tokens', label: `Tokens ${distribution.tokensPct}%`, count: portfolioPositions.length || tokenConfig.length },
-    { id: 'reserve', label: `Vigi Capital ${distribution.aiAgentPct}%` },
+    ...(hasAiAgent ? [{ id: 'reserve' as const, label: `Vigi Capital ${distribution.aiAgentPct}%` }] : []),
     { id: 'audit', label: 'Safety Log', count: stats.totalActivities },
   ];
+
+  // Si la distribución cambia a 0% AI mientras el tab está activo, volver a Portfolio
+  useEffect(() => {
+    if (!hasAiAgent && activeTab === 'reserve') setActiveTab('overview');
+  }, [hasAiAgent, activeTab]);
 
   return (
     <div className="min-h-screen bg-[#F5F5F4] text-[#0C1424] flex flex-col">
@@ -298,6 +307,7 @@ export default function DashboardPage() {
             showPerformance={totalInvestedUSD > 0}
             onAddFunds={() => setIsInvestModalOpen(true)}
             activeTokens={portfolioPositions.map((p: any) => p.asset_symbol).filter(Boolean)}
+            aiAgentPct={distribution.aiAgentPct}
           />
 
           {/* Tab Navigation */}
@@ -341,17 +351,19 @@ export default function DashboardPage() {
                 onAddFunds={() => setIsInvestModalOpen(true)}
                 tokenConfig={tokenConfig}
               />
-              <CashReserve
-                aave={{
-                  collateral: aiCapital?.collateral || '0',
-                  debt: '0',
-                  healthFactor: aiCapital ? 'N/A' : 'Unavailable',
-                }}
-                accountAddress={aiCapital?.address}
-                tokenBalances={aiCapital ? { USDT: aiCapital.usdt, aCelUSDT: aiCapital.aCelUSDT } : null}
-                onAddFunds={() => setIsInvestModalOpen(true)}
-                latestDecision={latestDecision}
-              />
+              {hasAiAgent && (
+                <CashReserve
+                  aave={{
+                    collateral: aiCapital?.collateral || '0',
+                    debt: '0',
+                    healthFactor: aiCapital ? 'N/A' : 'Unavailable',
+                  }}
+                  accountAddress={aiCapital?.address}
+                  tokenBalances={aiCapital ? { USDT: aiCapital.usdt, aCelUSDT: aiCapital.aCelUSDT } : null}
+                  onAddFunds={() => setIsInvestModalOpen(true)}
+                  latestDecision={latestDecision}
+                />
+              )}
             </div>
           )}
 
@@ -475,6 +487,7 @@ export default function DashboardPage() {
         onClose={() => setIsInvestModalOpen(false)}
         tokenConfig={tokenConfig}
         distribution={distribution}
+        vaultAddress={contractAddress || localStorage.getItem('stockWalletAddress')}
       />
 
       {/* Footer */}

@@ -12,6 +12,8 @@ interface AccountSummaryProps {
   showPerformance?: boolean;
   onAddFunds: () => void;
   activeTokens?: string[];
+  /** % asignado al AI adgent según el contrato (0 = sin capital autónomo) */
+  aiAgentPct?: number;
 }
 
 export const AccountSummary: React.FC<AccountSummaryProps> = ({
@@ -24,13 +26,18 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({
   showPerformance = true,
   onAddFunds,
   activeTokens = [],
+  aiAgentPct = 20,
 }) => {
   const isPositive = totalGainAmount >= 0;
+
+  // Si el contrato asigna 0% al AI adgent, la sección de capital autónomo se oculta
+  const hasAiAgent = aiAgentPct > 0;
+  const reserveValueShown = hasAiAgent ? reserveValue : 0;
 
   // Percentage allocations
   const safeTotal = totalBalance > 0 ? totalBalance : 1;
   const tokensPct = Math.round((tokensValue / safeTotal) * 100);
-  const reservePct = Math.round((reserveValue / safeTotal) * 100);
+  const reservePct = hasAiAgent ? Math.round((reserveValueShown / safeTotal) * 100) : 0;
   const cashPct = Math.max(0, 100 - tokensPct - reservePct);
 
   return (
@@ -134,7 +141,7 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({
             title={`Selected Tokens: ${tokensPct}%`}
           />
           <div
-            className="bg-[#2540EB] h-full transition-all duration-500"
+            className={`bg-[#2540EB] h-full transition-all duration-500 ${!hasAiAgent ? 'hidden' : ''}`}
             style={{ width: `${reservePct}%` }}
             title={`Autonomous AI Capital: ${reservePct}%`}
           />
@@ -180,7 +187,8 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({
             </span>
           </div>
 
-          {/* AI Discretionary Capital */}
+          {/* AI Discretionary Capital — oculto si el contrato asigna 0% */}
+          {hasAiAgent && (
           <div className="bg-[#F5F5F4] p-8">
             <div className="flex items-center gap-2">
               <span className="h-2 w-2 rounded-full bg-[#2540EB]" />
@@ -210,6 +218,7 @@ export const AccountSummary: React.FC<AccountSummaryProps> = ({
               Discretionary AI management &amp; safe reserve
             </span>
           </div>
+          )}
 
           {/* Cash & Gas */}
           <div className="bg-[#F5F5F4] p-8">
